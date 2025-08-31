@@ -4,7 +4,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { Configuration, OpenAIApi } from "openai";
+import OpenAI from "openai";
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 
@@ -25,12 +25,10 @@ function saveMemory() {
   fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
 }
 
-// --- OpenAI setup ---
-const openai = new OpenAIApi(
-  new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-);
+// --- OpenAI setup (new v4 syntax) ---
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // --- Persona prompt for Luna ---
 const persona = `
@@ -41,13 +39,14 @@ Rules:
 - Respect user boundaries and safety.
 - Keep conversations casual, supportive, and personal.
 `;
+
 // --- Chat handler ---
 async function chatWithLuna(userId, message) {
   if (!memory[userId]) memory[userId] = [];
 
   memory[userId].push({ role: "user", content: message });
 
-  const response = await openai.createChatCompletion({
+  const response = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: persona },
@@ -55,7 +54,7 @@ async function chatWithLuna(userId, message) {
     ],
   });
 
-  const reply = response.data.choices[0].message.content.trim();
+  const reply = response.choices[0].message.content.trim();
   memory[userId].push({ role: "assistant", content: reply });
   saveMemory();
 
@@ -82,6 +81,7 @@ app.post("/chat", async (req, res) => {
     res.status(500).json({ error: "AI error" });
   }
 });
+
 // --- Telegram Bot Integration ---
 if (process.env.TELEGRAM_TOKEN) {
   const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
