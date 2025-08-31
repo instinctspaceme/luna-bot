@@ -1,28 +1,26 @@
-# Luna Bot
+# 🌙 Luna Bot
 
-Luna is an AI companion bot with:
-- Web chat UI (at /)
-- Telegram integration
-- Age gate + safety filters
+Luna is a playful AI companion bot built with:
+- Express.js + Node.js
+- OpenAI (v4 SDK)
+- Telegram integration (optional)
+- Simple web chat UI
 
-## Setup
+---
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+## ✨ Features
+- Warm, supportive, fun (PG-13 only) AI persona
+- Remembers last 10 messages per user
+- Web chat UI at `/`
+- Telegram bot integration if you provide a token
+- Secure admin token for API requests
 
-2. Copy `.env.example` to `.env` and fill in your keys:
-   ```bash
-   OPENAI_API_KEY=sk-xxxx
-   ADMIN_TOKEN=changeme
-   TELEGRAM_TOKEN=xxxxx (optional)
-   PORT=10000
-   ```
+---
 
-3. Run locally:
-   ```bash
-   node server.js
-   ```
+## ⚡ Setup (Local)
 
-4. Deploy to Render/Railway/Fly.io and set env vars in dashboard.
+### 1. Clone & Install
+```bash
+git clone https://github.com/YOUR-USERNAME/luna-bot.git
+cd luna-bot
+npm install
