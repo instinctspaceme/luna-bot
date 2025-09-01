@@ -1,67 +1,57 @@
-// Luna AI Companion Bot
-// Node.js + Express + OpenAI + Telegram
-
 import express from "express";
-import dotenv from "dotenv";
-import cors from "cors";
-import OpenAI from "openai";
-import TelegramBot from "node-telegram-bot-api";
+import bodyParser from "body-parser";
 import fs from "fs";
+import TelegramBot from "node-telegram-bot-api";
+import OpenAI from "openai";
+import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 10000;
+
+app.use(bodyParser.json());
 app.use(express.static("public"));
 
-// --- Memory store (simple JSON per user) ---
-const memoryFile = "memory.json";
-let memory = {};
-if (fs.existsSync(memoryFile)) {
-  memory = JSON.parse(fs.readFileSync(memoryFile));
-}
-function saveMemory() {
-  fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
-}
-
-// --- OpenAI setup (new v4 syntax) ---
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// --- Persona prompt for Luna ---
-const persona = `
-You are Luna, a playful, supportive AI companion.
-Rules:
-- Always keep tone warm, fun, and a little flirty (PG-13 only).
-- Do not produce explicit NSFW content.
-- Respect user boundaries and safety.
-- Keep conversations casual, supportive, and personal.
-`;
+// ------------------ Memory ------------------
+let memory = {};
+const MEMORY_FILE = "memory.json";
 
-// --- Chat handler ---
-async function chatWithLuna(userId, message) {
+if (fs.existsSync(MEMORY_FILE)) {
+  memory = JSON.parse(fs.readFileSync(MEMORY_FILE, "utf-8"));
+}
+
+function saveMemory() {
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
+}
+
+// ------------------ OpenAI Helper ------------------
+async function getLunaReply(userId, message) {
   if (!memory[userId]) memory[userId] = [];
 
   memory[userId].push({ role: "user", content: message });
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
     messages: [
-      { role: "system", content: persona },
-      ...memory[userId].slice(-10), // last 10 exchanges
+      { role: "system", content: "You are Luna, a friendly and supportive AI assistant." },
+      ...memory[userId],
     ],
   });
 
-  const reply = response.choices[0].message.content.trim();
+  const reply = completion.choices[0].message.content;
+
   memory[userId].push({ role: "assistant", content: reply });
   saveMemory();
 
   return reply;
 }
 
-// Public endpoint (no token required)
+// ------------------ API Routes ------------------
 app.post("/public-chat", async (req, res) => {
   const { user_id, message } = req.body;
   if (!user_id || !message) {
@@ -69,85 +59,65 @@ app.post("/public-chat", async (req, res) => {
   }
 
   try {
-    const reply = await chatWithLuna(user_id, message);
+    const reply = await getLunaReply(user_id, message);
     res.json({ reply });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "AI error" });
-  }
-});
-// --- Express API endpoint ---
-app.post("/chat", async (req, res) => {
-  const auth = req.headers.authorization;
-  if (!auth || auth !== `Bearer ${process.env.ADMIN_TOKEN}`) {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
-
-  const { user_id, message } = req.body;
-  if (!user_id || !message) {
-    return res.status(400).json({ error: "Missing user_id or message" });
-  }
-
-  try {
-    const reply = await chatWithLuna(user_id, message);
-    res.json({ reply });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "AI error" });
+    res.status(500).json({ error: "Failed to get response" });
   }
 });
 
-// --- Telegram Bot Integration ---
+app.get("/history/:user_id", (req, res) => {
+  const { user_id } = req.params;
+  res.json({ history: memory[user_id] || [] });
+});
+
+app.delete("/reset/:user_id", (req, res) => {
+  const { user_id } = req.params;
+  if (memory[user_id]) {
+    delete memory[user_id];
+    saveMemory();
+  }
+  res.json({ success: true });
+});
+
+// ------------------ Telegram Bot ------------------
 if (process.env.TELEGRAM_TOKEN) {
   const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
-    const userId = `tg_${chatId}`; // separate from web UI
-    const reply = await chatWithLuna(userId, msg.text);
-    bot.sendMessage(chatId, reply);
+    const userId = "tg_" + chatId;
+    const text = msg.text?.trim();
+
+    // 🔥 Reset command
+    if (text === "/reset") {
+      if (memory[userId]) {
+        delete memory[userId];
+        saveMemory();
+      }
+      return bot.sendMessage(chatId, "🗑 Chat history has been reset. Start fresh with Luna!");
+    }
+
+    // 🔥 Help command
+    if (text === "/help") {
+      return bot.sendMessage(chatId, "🤖 Luna Commands:\n/reset → Reset your chat\n/help → Show this help menu");
+    }
+
+    // Normal chat
+    try {
+      const reply = await getLunaReply(userId, text);
+      bot.sendMessage(chatId, reply);
+    } catch (err) {
+      console.error(err);
+      bot.sendMessage(chatId, "❌ Error: Luna is unavailable right now.");
+    }
   });
+
+  console.log("✅ Telegram bot connected");
 }
 
-// --- Start Server ---
-const PORT = process.env.PORT || 3000;
+// ------------------ Start Server ------------------
 app.listen(PORT, () => {
-  console.log(`✅ Luna is live on http://localhost:${PORT}`);
-});
-// Fetch conversation history for a user
-app.get("/history/:user_id", (req, res) => {
-  const { user_id } = req.params;
-  if (!user_id) return res.status(400).json({ error: "Missing user_id" });
-
-  const history = memory[user_id] || [];
-  res.json({ history });
-});
-// Reset conversation history
-app.delete("/reset/:user_id", (req, res) => {
-  const { user_id } = req.params;
-  const { token } = req.query; // optional ?token=xxx for admin use
-
-  if (!user_id) return res.status(400).json({ error: "Missing user_id" });
-
-  // Normal user can only reset their own history
-  if (token !== process.env.ADMIN_TOKEN && user_id.startsWith("web_")) {
-    if (user_id !== req.query.user_id && !token) {
-      return res
-        .status(403)
-        .json({ error: "Not authorized to reset another user's history" });
-    }
-  }
-
-  // Admin can reset anyone if token matches
-  if (token && token !== process.env.ADMIN_TOKEN) {
-    return res.status(403).json({ error: "Invalid admin token" });
-  }
-
-  // Delete history
-  if (memory[user_id]) {
-    delete memory[user_id];
-    saveMemory();
-  }
-
-  res.json({ success: true, message: "Conversation reset for " + user_id });
+  console.log(`✅ Luna is live at http://localhost:${PORT}`);
 });
