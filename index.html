@@ -100,14 +100,13 @@
       send.disabled = true;
 
       try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer changeme" // match ADMIN_TOKEN in .env
-          },
-          body: JSON.stringify({ user_id: "webuser1", message: text })
-        });
+        const res = await fetch("/public-chat", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ user_id: "webuser1", message: text })
+});
 
         const data = await res.json();
         addMessage(data.reply || "Error from Luna", "luna");
