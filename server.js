@@ -122,3 +122,15 @@ app.get("/history/:user_id", (req, res) => {
   const history = memory[user_id] || [];
   res.json({ history });
 });
+// Reset conversation history for a user
+app.delete("/reset/:user_id", (req, res) => {
+  const { user_id } = req.params;
+  if (!user_id) return res.status(400).json({ error: "Missing user_id" });
+
+  if (memory[user_id]) {
+    delete memory[user_id];
+    saveMemory();
+  }
+
+  res.json({ success: true, message: "Conversation reset for " + user_id });
+});
