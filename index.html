@@ -209,3 +209,32 @@
     addMessage("❌ Failed to reset chat.", "luna", false);
   }
 });
+  send.addEventListener("click", sendMessage);
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+
+  // 🔥 NEW: Reset button logic
+  document.getElementById("reset").addEventListener("click", async () => {
+    if (!confirm("Reset your conversation with Luna?")) return;
+
+    try {
+      // User resets only their own history
+      await fetch("/reset/" + userId, { method: "DELETE" });
+
+      // Clear local storage
+      history = [];
+      localStorage.removeItem("luna_chat_" + userId);
+
+      // Refresh UI
+      chat.innerHTML = "";
+      addMessage("🗑 Chat reset. Start fresh with Luna!", "luna", false);
+    } catch (err) {
+      console.error("Reset failed:", err);
+      addMessage("❌ Failed to reset chat.", "luna", false);
+    }
+  });
+
+  // 🔥 At the very bottom, still load history
+  loadHistory();
+</script>
