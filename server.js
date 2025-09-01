@@ -103,17 +103,10 @@ if (process.env.TELEGRAM_TOKEN) {
 
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
-    const userId = `tg_${chatId}`;
-    try {
-      const reply = await chatWithLuna(userId, msg.text);
-      bot.sendMessage(chatId, reply);
-    } catch (err) {
-      console.error(err);
-      bot.sendMessage(chatId, "Sorry, Luna had an error. Try again!");
-    }
+    const userId = `tg_${chatId}`; // separate from web UI
+    const reply = await chatWithLuna(userId, msg.text);
+    bot.sendMessage(chatId, reply);
   });
-
-  console.log("✅ Telegram bot running");
 }
 
 // --- Start Server ---
