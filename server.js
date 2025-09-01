@@ -114,3 +114,11 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Luna is live on http://localhost:${PORT}`);
 });
+// Fetch conversation history for a user
+app.get("/history/:user_id", (req, res) => {
+  const { user_id } = req.params;
+  if (!user_id) return res.status(400).json({ error: "Missing user_id" });
+
+  const history = memory[user_id] || [];
+  res.json({ history });
+});
