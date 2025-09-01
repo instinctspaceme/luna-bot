@@ -122,11 +122,28 @@ app.get("/history/:user_id", (req, res) => {
   const history = memory[user_id] || [];
   res.json({ history });
 });
-// Reset conversation history for a user
+// Reset conversation history
 app.delete("/reset/:user_id", (req, res) => {
   const { user_id } = req.params;
+  const { token } = req.query; // optional ?token=xxx for admin use
+
   if (!user_id) return res.status(400).json({ error: "Missing user_id" });
 
+  // Normal user can only reset their own history
+  if (token !== process.env.ADMIN_TOKEN && user_id.startsWith("web_")) {
+    if (user_id !== req.query.user_id && !token) {
+      return res
+        .status(403)
+        .json({ error: "Not authorized to reset another user's history" });
+    }
+  }
+
+  // Admin can reset anyone if token matches
+  if (token && token !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ error: "Invalid admin token" });
+  }
+
+  // Delete history
   if (memory[user_id]) {
     delete memory[user_id];
     saveMemory();
