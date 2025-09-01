@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 10000;
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
+// ------------------ OpenAI Setup ------------------
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -52,11 +53,11 @@ async function getLunaReply(userId, message) {
 }
 
 // ------------------ API Routes ------------------
+
+// Web chat
 app.post("/public-chat", async (req, res) => {
   const { user_id, message } = req.body;
-  if (!user_id || !message) {
-    return res.status(400).json({ error: "Missing user_id or message" });
-  }
+  if (!user_id || !message) return res.status(400).json({ error: "Missing user_id or message" });
 
   try {
     const reply = await getLunaReply(user_id, message);
@@ -67,11 +68,13 @@ app.post("/public-chat", async (req, res) => {
   }
 });
 
+// Get history
 app.get("/history/:user_id", (req, res) => {
   const { user_id } = req.params;
   res.json({ history: memory[user_id] || [] });
 });
 
+// Reset user memory (Web UI)
 app.delete("/reset/:user_id", (req, res) => {
   const { user_id } = req.params;
   if (memory[user_id]) {
@@ -90,7 +93,12 @@ if (process.env.TELEGRAM_TOKEN) {
     const userId = "tg_" + chatId;
     const text = msg.text?.trim();
 
-    // 🔥 Reset command
+    // Help
+    if (text === "/help") {
+      return bot.sendMessage(chatId, "🤖 Luna Commands:\n/reset → Reset your chat\n/help → Show this help menu\n/admin_reset USERID ADMIN_TOKEN → Admin reset");
+    }
+
+    // User reset
     if (text === "/reset") {
       if (memory[userId]) {
         delete memory[userId];
@@ -99,9 +107,25 @@ if (process.env.TELEGRAM_TOKEN) {
       return bot.sendMessage(chatId, "🗑 Chat history has been reset. Start fresh with Luna!");
     }
 
-    // 🔥 Help command
-    if (text === "/help") {
-      return bot.sendMessage(chatId, "🤖 Luna Commands:\n/reset → Reset your chat\n/help → Show this help menu");
+    // Admin reset any user
+    if (text.startsWith("/admin_reset")) {
+      const parts = text.split(" ");
+      if (parts.length === 3) {
+        const targetUser = parts[1].trim();
+        const token = parts[2].trim();
+
+        if (token !== process.env.ADMIN_TOKEN) {
+          return bot.sendMessage(chatId, "❌ Invalid admin token.");
+        }
+
+        if (memory[targetUser]) {
+          delete memory[targetUser];
+          saveMemory();
+        }
+        return bot.sendMessage(chatId, `🗑 Admin reset: memory cleared for ${targetUser}`);
+      } else {
+        return bot.sendMessage(chatId, "❌ Usage: /admin_reset USERID TOKEN");
+      }
     }
 
     // Normal chat
