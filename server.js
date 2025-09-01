@@ -61,6 +61,21 @@ async function chatWithLuna(userId, message) {
   return reply;
 }
 
+// Public endpoint (no token required)
+app.post("/public-chat", async (req, res) => {
+  const { user_id, message } = req.body;
+  if (!user_id || !message) {
+    return res.status(400).json({ error: "Missing user_id or message" });
+  }
+
+  try {
+    const reply = await chatWithLuna(user_id, message);
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "AI error" });
+  }
+});
 // --- Express API endpoint ---
 app.post("/chat", async (req, res) => {
   const auth = req.headers.authorization;
