@@ -190,3 +190,22 @@
   // Replace renderHistory() with server sync
   loadHistory();
   </script>
+  document.getElementById("reset").addEventListener("click", async () => {
+  if (!confirm("Reset conversation with Luna?")) return;
+
+  try {
+    // Clear on server
+    await fetch("/reset/" + userId, { method: "DELETE" });
+
+    // Clear on browser
+    history = [];
+    localStorage.removeItem("luna_chat_" + userId);
+
+    // Refresh UI
+    chat.innerHTML = "";
+    addMessage("🗑 Chat reset. Start fresh with Luna!", "luna", false);
+  } catch (err) {
+    console.error("Reset failed:", err);
+    addMessage("❌ Failed to reset chat.", "luna", false);
+  }
+});
