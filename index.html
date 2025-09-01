@@ -79,47 +79,86 @@
   </div>
 
   <script>
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("input");
-    const send = document.getElementById("send");
+  // Generate or reuse unique ID per browser session
+  const userId =
+    localStorage.getItem("luna_user_id") ||
+    "web_" + Math.random().toString(36).substring(2, 8);
+  localStorage.setItem("luna_user_id", userId);
 
-    function addMessage(text, className) {
-      const div = document.createElement("div");
-      div.className = "message " + className;
-      div.textContent = text;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+  const chat = document.getElementById("chat");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+
+  // Local history fallback
+  let history = JSON.parse(localStorage.getItem("luna_chat_" + userId)) || [];
+
+  function renderHistory() {
+    chat.innerHTML = "";
+    history.forEach((msg) => addMessage(msg.text, msg.type, false));
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function addMessage(text, className, save = true) {
+    const div = document.createElement("div");
+    div.className = "message " + className;
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+
+    if (save) {
+      history.push({ text, type: className });
+      localStorage.setItem("luna_chat_" + userId, JSON.stringify(history));
+    }
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage(text, "user");
+    input.value = "";
+    send.disabled = true;
+
+    try {
+      const res = await fetch("/public-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, message: text })
+      });
+
+      const data = await res.json();
+      addMessage(data.reply || "Error from Luna", "luna");
+    } catch (err) {
+      console.error(err);
+      addMessage("❌ Failed to reach Luna.", "luna");
     }
 
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
+    send.disabled = false;
+  }
 
-      addMessage(text, "user");
-      input.value = "";
-      send.disabled = true;
+  send.addEventListener("click", sendMessage);
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
 
-      try {
-        const res = await fetch("/public-chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ user_id: "webuser1", message: text })
-});
+  // 🔥 NEW: Fetch server history on page load
+  async function loadHistory() {
+    try {
+      const res = await fetch("/history/" + userId);
+      const data = await res.json();
 
-        const data = await res.json();
-        addMessage(data.reply || "Error from Luna", "luna");
-      } catch (err) {
-        console.error(err);
-        addMessage("❌ Failed to reach Luna.", "luna");
-      }
+      history = data.history.map((msg) => ({
+        text: msg.role === "user" ? msg.content : msg.content[0].text,
+        type: msg.role === "user" ? "user" : "luna"
+      }));
 
-      send.disabled = false;
+      renderHistory();
+    } catch (err) {
+      console.error("Failed to load server history:", err);
+      renderHistory(); // fallback to local only
     }
+  }
 
-    send.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
+  // Replace renderHistory() with server sync
+  loadHistory();
   </script>
-</body>
-</html>
