@@ -1,147 +1,144 @@
+// server.js
 import express from "express";
 import bodyParser from "body-parser";
 import fs from "fs";
-import TelegramBot from "node-telegram-bot-api";
-import OpenAI from "openai";
 import dotenv from "dotenv";
+import { Telegraf } from "telegraf";
+import OpenAI from "openai";
 
 dotenv.config();
 
 const app = express();
+app.use(bodyParser.json());
+app.use(express.static("public")); // serve Web UI
+
+// ✅ Load environment
+const openaiKey = process.env.OPENAI_API_KEY;
+const telegramToken = process.env.TELEGRAM_TOKEN;
+const adminToken = process.env.ADMIN_TOKEN;
 const PORT = process.env.PORT || 10000;
 
-app.use(bodyParser.json());
-app.use(express.static("public"));
-
-// ------------------ OpenAI Setup ------------------
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// ------------------ Memory ------------------
-let memory = {};
+// ✅ Memory store
 const MEMORY_FILE = "memory.json";
-
+let memory = {};
 if (fs.existsSync(MEMORY_FILE)) {
-  memory = JSON.parse(fs.readFileSync(MEMORY_FILE, "utf-8"));
+  memory = JSON.parse(fs.readFileSync(MEMORY_FILE));
 }
-
 function saveMemory() {
   fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
 }
 
-// ------------------ OpenAI Helper ------------------
-async function getLunaReply(userId, message) {
-  if (!memory[userId]) memory[userId] = [];
+// ✅ OpenAI client
+const openai = new OpenAI({ apiKey: openaiKey });
 
+// ✅ Generate AI response
+async function generateResponse(userId, message) {
+  if (!memory[userId]) memory[userId] = [];
   memory[userId].push({ role: "user", content: message });
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: "You are Luna, a friendly and supportive AI assistant." },
-      ...memory[userId],
-    ],
+    messages: memory[userId],
   });
 
   const reply = completion.choices[0].message.content;
-
   memory[userId].push({ role: "assistant", content: reply });
   saveMemory();
 
   return reply;
 }
 
-// ------------------ API Routes ------------------
-
-// Web chat
+// ✅ Web UI route
 app.post("/public-chat", async (req, res) => {
-  const { user_id, message } = req.body;
-  if (!user_id || !message) return res.status(400).json({ error: "Missing user_id or message" });
-
+  const { userId, message } = req.body;
   try {
-    const reply = await getLunaReply(user_id, message);
+    const reply = await generateResponse(userId, message);
     res.json({ reply });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to get response" });
+    console.error("OpenAI error:", err);
+    res.status(500).json({ error: "AI error" });
   }
 });
 
-// Get history
-app.get("/history/:user_id", (req, res) => {
-  const { user_id } = req.params;
-  res.json({ history: memory[user_id] || [] });
+// ✅ Reset endpoint (Web)
+app.delete("/reset/:userId", (req, res) => {
+  const userId = req.params.userId;
+  delete memory[userId];
+  saveMemory();
+  res.json({ success: true, message: `Reset memory for ${userId}` });
 });
 
-// Reset user memory (Web UI)
-app.delete("/reset/:user_id", (req, res) => {
-  const { user_id } = req.params;
-  if (memory[user_id]) {
-    delete memory[user_id];
+// ✅ Debug /status endpoint
+app.get("/status", (req, res) => {
+  res.json({
+    openai: openaiKey ? "✅ Loaded" : "❌ Missing",
+    telegram: telegramToken ? "✅ Loaded" : "❌ Missing",
+    adminToken: adminToken ? "✅ Loaded" : "❌ Missing",
+    port: PORT,
+    uptime: process.uptime().toFixed(2) + "s",
+  });
+});
+
+// ✅ Telegram bot
+if (telegramToken) {
+  const bot = new Telegraf(telegramToken);
+
+  bot.start((ctx) =>
+    ctx.reply("👋 Hi, I’m Luna! Type anything to chat.\nUse /reset to clear memory.")
+  );
+
+  bot.help((ctx) =>
+    ctx.reply("Commands:\n/reset → Clear your memory\n/status → Bot health\n/admin_reset <USER_ID> <ADMIN_TOKEN>")
+  );
+
+  bot.command("reset", (ctx) => {
+    const userId = `tg_${ctx.chat.id}`;
+    delete memory[userId];
     saveMemory();
-  }
-  res.json({ success: true });
-});
+    ctx.reply("✅ Your memory has been reset.");
+  });
 
-// ------------------ Telegram Bot ------------------
-if (process.env.TELEGRAM_TOKEN) {
-  const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
+  bot.command("status", (ctx) => {
+    ctx.reply(
+      `Bot Status:\nOpenAI: ${openaiKey ? "✅" : "❌"}\nTelegram: ${
+        telegramToken ? "✅" : "❌"
+      }\nAdmin Token: ${adminToken ? "✅" : "❌"}\nUptime: ${process
+        .uptime()
+        .toFixed(2)}s`
+    );
+  });
 
-  bot.on("message", async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = "tg_" + chatId;
-    const text = msg.text?.trim();
-
-    // Help
-    if (text === "/help") {
-      return bot.sendMessage(chatId, "🤖 Luna Commands:\n/reset → Reset your chat\n/help → Show this help menu\n/admin_reset USERID ADMIN_TOKEN → Admin reset");
+  bot.command("admin_reset", (ctx) => {
+    const parts = ctx.message.text.split(" ");
+    if (parts.length !== 3) {
+      return ctx.reply("❌ Usage: /admin_reset <USER_ID> <ADMIN_TOKEN>");
     }
-
-    // User reset
-    if (text === "/reset") {
-      if (memory[userId]) {
-        delete memory[userId];
-        saveMemory();
-      }
-      return bot.sendMessage(chatId, "🗑 Chat history has been reset. Start fresh with Luna!");
+    const [_, targetId, providedToken] = parts;
+    if (providedToken !== adminToken) {
+      return ctx.reply("❌ Invalid admin token.");
     }
+    delete memory[targetId];
+    saveMemory();
+    ctx.reply(`✅ Memory reset for ${targetId}`);
+  });
 
-    // Admin reset any user
-    if (text.startsWith("/admin_reset")) {
-      const parts = text.split(" ");
-      if (parts.length === 3) {
-        const targetUser = parts[1].trim();
-        const token = parts[2].trim();
-
-        if (token !== process.env.ADMIN_TOKEN) {
-          return bot.sendMessage(chatId, "❌ Invalid admin token.");
-        }
-
-        if (memory[targetUser]) {
-          delete memory[targetUser];
-          saveMemory();
-        }
-        return bot.sendMessage(chatId, `🗑 Admin reset: memory cleared for ${targetUser}`);
-      } else {
-        return bot.sendMessage(chatId, "❌ Usage: /admin_reset USERID TOKEN");
-      }
-    }
-
-    // Normal chat
+  bot.on("text", async (ctx) => {
+    const userId = `tg_${ctx.chat.id}`;
+    const message = ctx.message.text;
     try {
-      const reply = await getLunaReply(userId, text);
-      bot.sendMessage(chatId, reply);
+      const reply = await generateResponse(userId, message);
+      ctx.reply(reply);
     } catch (err) {
-      console.error(err);
-      bot.sendMessage(chatId, "❌ Error: Luna is unavailable right now.");
+      console.error("OpenAI error:", err);
+      ctx.reply("❌ Sorry, I couldn’t process that.");
     }
   });
 
-  console.log("✅ Telegram bot connected");
+  bot.launch();
+  console.log("🤖 Telegram bot started!");
 }
 
-// ------------------ Start Server ------------------
+// ✅ Start server
 app.listen(PORT, () => {
-  console.log(`✅ Luna is live at http://localhost:${PORT}`);
+  console.log(`🚀 Luna Bot running on port ${PORT}`);
 });
