@@ -1,144 +1,124 @@
-// server.js
 import express from "express";
-import bodyParser from "body-parser";
-import fs from "fs";
-import dotenv from "dotenv";
 import { Telegraf } from "telegraf";
-import OpenAI from "openai";
+import { OpenAI } from "openai";
+import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
-
 const app = express();
-app.use(bodyParser.json());
-app.use(express.static("public")); // serve Web UI
+app.use(express.json());
+app.use(express.static("public"));
 
-// ✅ Load environment
-const openaiKey = process.env.OPENAI_API_KEY;
-const telegramToken = process.env.TELEGRAM_TOKEN;
-const adminToken = process.env.ADMIN_TOKEN;
 const PORT = process.env.PORT || 10000;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memoryFile = "memory.json";
 
-// ✅ Memory store
-const MEMORY_FILE = "memory.json";
 let memory = {};
-if (fs.existsSync(MEMORY_FILE)) {
-  memory = JSON.parse(fs.readFileSync(MEMORY_FILE));
+if (fs.existsSync(memoryFile)) {
+  memory = JSON.parse(fs.readFileSync(memoryFile));
 }
+
 function saveMemory() {
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
+  fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
 }
 
-// ✅ OpenAI client
-const openai = new OpenAI({ apiKey: openaiKey });
-
-// ✅ Generate AI response
-async function generateResponse(userId, message) {
+async function getAIResponse(userId, message) {
+  if (!process.env.OPENAI_API_KEY) return "❌ Missing OpenAI API key.";
   if (!memory[userId]) memory[userId] = [];
   memory[userId].push({ role: "user", content: message });
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: memory[userId],
-  });
-
-  const reply = completion.choices[0].message.content;
-  memory[userId].push({ role: "assistant", content: reply });
-  saveMemory();
-
-  return reply;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: memory[userId],
+    });
+    const reply = response.choices[0].message.content;
+    memory[userId].push({ role: "assistant", content: reply });
+    saveMemory();
+    return reply;
+  } catch (err) {
+    console.error("OpenAI error:", err.message);
+    return "⚠️ Error connecting to AI.";
+  }
 }
 
-// ✅ Web UI route
+// 🌐 Web UI
 app.post("/public-chat", async (req, res) => {
   const { userId, message } = req.body;
-  try {
-    const reply = await generateResponse(userId, message);
-    res.json({ reply });
-  } catch (err) {
-    console.error("OpenAI error:", err);
-    res.status(500).json({ error: "AI error" });
-  }
+  const reply = await getAIResponse(userId, message);
+  res.json({ reply });
 });
 
-// ✅ Reset endpoint (Web)
+// Reset for Web
 app.delete("/reset/:userId", (req, res) => {
-  const userId = req.params.userId;
+  const { userId } = req.params;
   delete memory[userId];
   saveMemory();
-  res.json({ success: true, message: `Reset memory for ${userId}` });
+  res.json({ success: true });
 });
 
-// ✅ Debug /status endpoint
+// 🔑 Admin reset (for big memory)
+app.post("/admin_reset", (req, res) => {
+  const { targetUserId, token } = req.body;
+  if (token !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  delete memory[targetUserId];
+  saveMemory();
+  res.json({ success: true });
+});
+
+// 🩺 Status check
 app.get("/status", (req, res) => {
   res.json({
-    openai: openaiKey ? "✅ Loaded" : "❌ Missing",
-    telegram: telegramToken ? "✅ Loaded" : "❌ Missing",
-    adminToken: adminToken ? "✅ Loaded" : "❌ Missing",
+    openai: process.env.OPENAI_API_KEY ? "✅ Loaded" : "❌ Missing",
+    telegram: process.env.TELEGRAM_TOKEN ? "✅ Loaded" : "❌ Missing",
+    adminToken: process.env.ADMIN_TOKEN ? "✅ Loaded" : "❌ Missing",
     port: PORT,
     uptime: process.uptime().toFixed(2) + "s",
   });
 });
 
-// ✅ Telegram bot
-if (telegramToken) {
-  const bot = new Telegraf(telegramToken);
+// 📱 Telegram setup
+if (process.env.TELEGRAM_TOKEN) {
+  const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
-  bot.start((ctx) =>
-    ctx.reply("👋 Hi, I’m Luna! Type anything to chat.\nUse /reset to clear memory.")
-  );
-
+  bot.start((ctx) => ctx.reply("👋 Hello! I’m Luna. Type /help to see commands."));
   bot.help((ctx) =>
-    ctx.reply("Commands:\n/reset → Clear your memory\n/status → Bot health\n/admin_reset <USER_ID> <ADMIN_TOKEN>")
+    ctx.reply("/help - commands\n/reset - clear your memory\n/status - bot health\n/admin_reset <USER_ID> <TOKEN>")
   );
 
   bot.command("reset", (ctx) => {
-    const userId = `tg_${ctx.chat.id}`;
-    delete memory[userId];
+    delete memory[ctx.from.id];
     saveMemory();
     ctx.reply("✅ Your memory has been reset.");
   });
 
   bot.command("status", (ctx) => {
     ctx.reply(
-      `Bot Status:\nOpenAI: ${openaiKey ? "✅" : "❌"}\nTelegram: ${
-        telegramToken ? "✅" : "❌"
-      }\nAdmin Token: ${adminToken ? "✅" : "❌"}\nUptime: ${process
-        .uptime()
-        .toFixed(2)}s`
+      `OpenAI: ${process.env.OPENAI_API_KEY ? "✅" : "❌"}\nTelegram: ✅\nUptime: ${process.uptime().toFixed(2)}s`
     );
   });
 
   bot.command("admin_reset", (ctx) => {
     const parts = ctx.message.text.split(" ");
-    if (parts.length !== 3) {
-      return ctx.reply("❌ Usage: /admin_reset <USER_ID> <ADMIN_TOKEN>");
-    }
-    const [_, targetId, providedToken] = parts;
-    if (providedToken !== adminToken) {
-      return ctx.reply("❌ Invalid admin token.");
-    }
-    delete memory[targetId];
+    if (parts.length < 3) return ctx.reply("Usage: /admin_reset <USER_ID> <TOKEN>");
+    const [_, userId, token] = parts;
+    if (token !== process.env.ADMIN_TOKEN) return ctx.reply("❌ Invalid admin token.");
+    delete memory[userId];
     saveMemory();
-    ctx.reply(`✅ Memory reset for ${targetId}`);
+    ctx.reply(`✅ Reset memory for user ${userId}`);
   });
 
   bot.on("text", async (ctx) => {
-    const userId = `tg_${ctx.chat.id}`;
-    const message = ctx.message.text;
-    try {
-      const reply = await generateResponse(userId, message);
-      ctx.reply(reply);
-    } catch (err) {
-      console.error("OpenAI error:", err);
-      ctx.reply("❌ Sorry, I couldn’t process that.");
-    }
+    const reply = await getAIResponse(ctx.from.id, ctx.message.text);
+    ctx.reply(reply);
   });
 
   bot.launch();
   console.log("🤖 Telegram bot started!");
 }
 
-// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Luna Bot running on port ${PORT}`);
 });
