@@ -1,16 +1,49 @@
-{
-  "name": "luna-bot",
-  "version": "1.0.0",
-  "main": "server.js",
-  "type": "module",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "node-telegram-bot-api": "^0.66.0",
-    "openai": "^4.56.0"
-  }
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Luna Web Chat</title>
+</head>
+<body>
+  <h2>Luna Web Chat</h2>
+  <div id="chat"></div>
+  <input id="message" placeholder="Type..." />
+  <button onclick="sendMessage()">Send</button>
+  <button onclick="resetChat()">🗑 Reset</button>
+
+  <script>
+    const userId = "web_" + Math.random().toString(36).substring(2, 8);
+
+    async function sendMessage() {
+      const input = document.getElementById("message");
+      const text = input.value.trim();
+      if (!text) return;
+
+      append("You: " + text);
+      input.value = "";
+
+      const res = await fetch("/public-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, message: text }),
+      });
+
+      const data = await res.json();
+      append("Luna: " + data.reply);
+    }
+
+    async function resetChat() {
+      await fetch("/reset/" + userId, { method: "DELETE" });
+      document.getElementById("chat").innerHTML = "";
+      append("✅ Memory reset.");
+    }
+
+    function append(msg) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.innerText = msg;
+      chat.appendChild(div);
+    }
+  </script>
+</body>
+</html>
