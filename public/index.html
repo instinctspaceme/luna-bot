@@ -65,6 +65,11 @@
       <button onclick="loadUsers()">🔄 Refresh Users</button>
       <button onclick="resetAll()">🗑 Reset All</button>
     </div>
+
+    <div class="card">
+      <h3>User Chat History & Logs</h3>
+      <pre id="history">Select a user...</pre>
+    </div>
   </div>
 
   <script>
@@ -122,7 +127,11 @@
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${userId}</td>
-          <td><button onclick="resetUser('${userId}')">🗑 Reset</button></td>
+          <td>
+            <button onclick="resetUser('${userId}')">🗑 Reset</button>
+            <button onclick="viewHistory('${userId}')">📜 History</button>
+            <button onclick="viewLogs('${userId}')">📂 Logs</button>
+          </td>
         `;
         tbody.appendChild(row);
       });
@@ -142,6 +151,29 @@
       await fetch("/admin/reset-all?token=" + adminToken, { method: "DELETE" });
       alert("✅ All users reset.");
       loadUsers();
+    }
+
+    async function viewHistory(userId) {
+      if (!adminToken) return alert("⛔ Enter token first!");
+      const res = await fetch("/admin/history/" + userId + "?token=" + adminToken);
+      if (!res.ok) {
+        document.getElementById("history").innerText = "⚠️ Error loading history.";
+        return;
+      }
+      const messages = await res.json();
+      let formatted = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
+      document.getElementById("history").innerText = formatted || "No history available.";
+    }
+
+    async function viewLogs(userId) {
+      if (!adminToken) return alert("⛔ Enter token first!");
+      const res = await fetch("/admin/logs/" + userId + "?token=" + adminToken);
+      if (!res.ok) {
+        document.getElementById("history").innerText = "⚠️ Error loading logs.";
+        return;
+      }
+      const text = await res.text();
+      document.getElementById("history").innerText = text || "No logs found.";
     }
   </script>
 </body>
