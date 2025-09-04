@@ -11,9 +11,10 @@
     .user { background:#2d6cdf; color:white; text-align:right; }
     .bot { background:#444; color:#eee; text-align:left; }
     img { max-width:100%; margin-top:8px; border-radius:6px; }
-    #controls { max-width:600px; margin:20px auto; display:flex; }
+    audio { margin-top:8px; width:100%; }
+    #controls { max-width:600px; margin:20px auto; display:flex; gap:10px; }
     #input { flex:1; padding:10px; border-radius:6px; border:1px solid #555; }
-    button { margin-left:10px; padding:10px 20px; border:none; border-radius:6px; background:#2d6cdf; color:white; cursor:pointer; }
+    button { padding:10px 20px; border:none; border-radius:6px; background:#2d6cdf; color:white; cursor:pointer; }
     button:hover { background:#1a4bb8; }
   </style>
 </head>
@@ -21,8 +22,9 @@
   <div id="chat"></div>
 
   <div id="controls">
-    <input id="input" placeholder="Type a message (try /imagine a cat in space)">
+    <input id="input" placeholder="Type a message... (try /imagine or /voice)">
     <button onclick="sendMessage()">Send</button>
+    <button onclick="sendVoice()">🎙️ Voice Reply</button>
   </div>
 
   <script>
@@ -30,16 +32,23 @@
     const input = document.getElementById("input");
     const userId = "webuser-" + Math.random().toString(36).substring(7);
 
-    function addMessage(text, sender="bot", isImage=false) {
+    function addMessage(content, sender="bot", type="text") {
       const msg = document.createElement("div");
       msg.className = "msg " + sender;
-      if (isImage) {
+
+      if (type === "image") {
         const img = document.createElement("img");
-        img.src = text;
+        img.src = content;
         msg.appendChild(img);
+      } else if (type === "audio") {
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.src = content;
+        msg.appendChild(audio);
       } else {
-        msg.innerText = text;
+        msg.innerText = content;
       }
+
       chat.appendChild(msg);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -58,11 +67,35 @@
         });
         const data = await res.json();
 
-        // If reply contains an image URL
-        if (data.reply && data.reply.startsWith("http")) {
-          addMessage(data.reply, "bot", true);
+        if (data.type === "image") {
+          addMessage(data.reply, "bot", "image");
+        } else if (data.type === "audio") {
+          addMessage(data.reply, "bot", "audio");
         } else {
           addMessage(data.reply || "⚠️ No response", "bot");
+        }
+      } catch (err) {
+        addMessage("⚠️ Error: " + err.message, "bot");
+      }
+    }
+
+    async function sendVoice() {
+      const message = input.value.trim() || "Hello Luna!";
+      addMessage("🎙️ (voice request): " + message, "user");
+      input.value = "";
+
+      try {
+        const res = await fetch("/public-voice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, message })
+        });
+        const data = await res.json();
+
+        if (data.audioUrl) {
+          addMessage(data.audioUrl, "bot", "audio");
+        } else {
+          addMessage("⚠️ No audio reply.", "bot");
         }
       } catch (err) {
         addMessage("⚠️ Error: " + err.message, "bot");
