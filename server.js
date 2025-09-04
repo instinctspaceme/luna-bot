@@ -1,144 +1,101 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
+import bodyParser from "body-parser";
 import { Telegraf } from "telegraf";
-import { OpenAI } from "openai";
-import dotenv from "dotenv";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+import OpenAI from "openai";
 
 dotenv.config();
+
+// ================== Setup ==================
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(bodyParser.json());
 app.use(express.static("public"));
 
-const PORT = process.env.PORT || 10000;
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const memoryFile = "memory.json";
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 🧠 Load memory
+// ================== Memory ==================
 let memory = {};
-if (fs.existsSync(memoryFile)) {
-  memory = JSON.parse(fs.readFileSync(memoryFile));
+const memoryFile = path.join(__dirname, "memory.json");
+
+function loadMemory() {
+  if (fs.existsSync(memoryFile)) {
+    try {
+      memory = JSON.parse(fs.readFileSync(memoryFile, "utf-8"));
+    } catch {
+      memory = {};
+    }
+  }
 }
 function saveMemory() {
   fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
 }
+loadMemory();
 
-// 🛡️ Rate Limiter
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  message: { error: "⚠️ Too many requests, please slow down." },
-});
-app.use("/public-chat", limiter);
+// ================== Helpers ==================
+async function chatWithLuna(userId, userMessage) {
+  if (!memory[userId]) memory[userId] = { notes: [], messages: [] };
 
-// ✨ Summarization
-async function summarizeIfNeeded(userId) {
-  if (memory[userId] && memory[userId].length > 20) {
-    const summaryInput = memory[userId].slice(0, 15);
-    try {
-      const summaryResp = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "Summarize this conversation briefly." },
-          ...summaryInput,
-        ],
-      });
-      const summary = summaryResp.choices[0].message.content;
-      memory[userId] = [{ role: "system", content: `Summary: ${summary}` }].concat(
-        memory[userId].slice(-5)
-      );
-      saveMemory();
-    } catch (err) {
-      console.error("Summarization failed:", err.message);
-    }
+  memory[userId].messages.push({ role: "user", content: userMessage });
+  if (memory[userId].messages.length > 20) {
+    memory[userId].messages = memory[userId].messages.slice(-20);
   }
-}
-
-// 🔮 AI Response
-async function getAIResponse(userId, message) {
-  if (!process.env.OPENAI_API_KEY) return "❌ Missing OpenAI API key.";
-  if (!memory[userId]) memory[userId] = [];
-  memory[userId].push({ role: "user", content: message });
-
-  await summarizeIfNeeded(userId);
 
   try {
-    const response = await openai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: memory[userId],
+      messages: [
+        { role: "system", content: "You are Luna, a friendly AI assistant with memory." },
+        ...memory[userId].messages,
+      ],
     });
 
-    const reply = response.choices[0].message.content;
-    memory[userId].push({ role: "assistant", content: reply });
+    const reply = completion.choices[0].message.content;
+    memory[userId].messages.push({ role: "assistant", content: reply });
     saveMemory();
     return reply;
   } catch (err) {
-    console.error("OpenAI error:", err.message);
-    return "⚠️ Luna is having trouble connecting to AI.";
+    console.error("OpenAI Error:", err);
+    return "⚠️ Sorry, I had a problem.";
   }
 }
 
-// 🌐 Web Chat
-app.post("/public-chat", async (req, res) => {
+// ================== Telegram Bot ==================
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+  bot.start(ctx => ctx.reply("👋 Hi! I’m Luna. Let’s chat!"));
+  bot.command("forget", ctx => {
+    memory[ctx.from.id] = { notes: [], messages: [] };
+    saveMemory();
+    ctx.reply("🗑 Memory cleared!");
+  });
+
+  bot.on("text", async ctx => {
+    const userId = ctx.from.id;
+    const text = ctx.message.text;
+    const reply = await chatWithLuna(userId, text);
+    ctx.reply(reply);
+  });
+
+  bot.launch();
+  console.log("✅ Telegram bot running...");
+}
+
+// ================== Web Routes ==================
+app.post("/chat", async (req, res) => {
   const { userId, message } = req.body;
-
-  // Image generation
-  if (message.startsWith("/imagine ")) {
-    try {
-      const prompt = message.replace("/imagine ", "");
-      const img = await openai.images.generate({ model: "gpt-image-1", prompt });
-      return res.json({ reply: img.data[0].url });
-    } catch (err) {
-      return res.json({ reply: "⚠️ Failed to generate image." });
-    }
-  }
-
-  // Voice shortcut
-  if (message.startsWith("/voice ")) {
-    try {
-      const prompt = message.replace("/voice ", "");
-      const speech = await openai.audio.speech.create({
-        model: "gpt-4o-mini-tts",
-        voice: "alloy",
-        input: prompt,
-      });
-      const buffer = Buffer.from(await speech.arrayBuffer());
-      const filename = `voice-${Date.now()}.mp3`;
-      const filepath = `public/${filename}`;
-      fs.writeFileSync(filepath, buffer);
-
-      return res.json({ reply: "/" + filename, type: "audio" });
-    } catch (err) {
-      return res.json({ reply: "⚠️ Failed to generate voice." });
-    }
-  }
-
-  const reply = await getAIResponse(userId, message);
-  res.json({ reply, type: "text" });
+  if (!userId || !message) return res.status(400).json({ error: "Missing fields" });
+  const reply = await chatWithLuna(userId, message);
+  res.json({ reply });
 });
 
-// 🎙️ Voice endpoint (UI button)
-app.post("/public-voice", async (req, res) => {
-  const { userId, message } = req.body;
-  try {
-    const speech = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: message,
-    });
-    const buffer = Buffer.from(await speech.arrayBuffer());
-    const filename = `voice-${Date.now()}.mp3`;
-    const filepath = `public/${filename}`;
-    fs.writeFileSync(filepath, buffer);
-
-    res.json({ audioUrl: "/" + filename });
-  } catch (err) {
-    console.error("Voice error:", err.message);
-    res.status(500).json({ error: "⚠️ Failed to generate voice reply." });
-  }
-});
-
-// Reset (Web)
 app.delete("/reset/:userId", (req, res) => {
   const { userId } = req.params;
   delete memory[userId];
@@ -146,71 +103,36 @@ app.delete("/reset/:userId", (req, res) => {
   res.json({ success: true });
 });
 
-// 🩺 Status
 app.get("/status", (req, res) => {
   res.json({
-    openai: process.env.OPENAI_API_KEY ? "✅ Loaded" : "❌ Missing",
-    telegram: process.env.TELEGRAM_TOKEN ? "✅ Loaded" : "❌ Missing",
-    port: PORT,
-    uptime: process.uptime().toFixed(2) + "s",
+    uptime: process.uptime(),
+    users: Object.keys(memory).length,
+    telegram: !!process.env.TELEGRAM_BOT_TOKEN,
+    openai: !!process.env.OPENAI_API_KEY,
   });
 });
-// 📋 Admin: List active users
-app.get("/admin/users", (req, res) => {
+
+// ================== Admin Security ==================
+function checkAdmin(req, res, next) {
+  const token = req.query.token || req.headers["x-admin-token"];
+  if (token !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ error: "⛔ Unauthorized" });
+  }
+  next();
+}
+
+// Admin routes
+app.get("/admin/users", checkAdmin, (req, res) => {
   res.json(Object.keys(memory));
 });
 
-// 📱 Telegram Bot
-if (process.env.TELEGRAM_TOKEN) {
-  const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
+app.delete("/admin/reset-all", checkAdmin, (req, res) => {
+  memory = {};
+  saveMemory();
+  res.json({ success: true, message: "✅ All memories cleared." });
+});
 
-  bot.start((ctx) => ctx.reply("👋 Hello! I’m Luna. Type /help to see commands."));
-  bot.help((ctx) =>
-    ctx.reply("/help\n/reset\n/imagine <prompt>\n/voice <msg>\n/status")
-  );
-
-  bot.command("reset", (ctx) => {
-    delete memory[ctx.from.id];
-    saveMemory();
-    ctx.reply("✅ Your memory has been reset.");
-  });
-
-  bot.command("imagine", async (ctx) => {
-    const prompt = ctx.message.text.replace("/imagine ", "");
-    try {
-      const img = await openai.images.generate({ model: "gpt-image-1", prompt });
-      ctx.replyWithPhoto(img.data[0].url);
-    } catch {
-      ctx.reply("⚠️ Failed to generate image.");
-    }
-  });
-
-  bot.command("voice", async (ctx) => {
-    const prompt = ctx.message.text.replace("/voice ", "") || "Hello from Luna!";
-    try {
-      const speech = await openai.audio.speech.create({
-        model: "gpt-4o-mini-tts",
-        voice: "alloy",
-        input: prompt,
-      });
-      const buffer = Buffer.from(await speech.arrayBuffer());
-      fs.writeFileSync("reply.ogg", buffer);
-      await ctx.replyWithVoice({ source: "reply.ogg" });
-    } catch {
-      ctx.reply("⚠️ Failed to generate voice reply.");
-    }
-  });
-
-  bot.on("text", async (ctx) => {
-    const reply = await getAIResponse(ctx.from.id, ctx.message.text);
-    ctx.reply(reply);
-  });
-
-  bot.launch();
-  console.log("🤖 Telegram bot started!");
-}
-
-// 🚀 Start server
+// ================== Start ==================
 app.listen(PORT, () => {
-  console.log(`🚀 Luna Bot running on port ${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
