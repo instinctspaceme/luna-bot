@@ -120,6 +120,17 @@ app.get("/admin/logs/:userId", checkAdmin, (req, res) => {
   res.type("text/plain").send(logs);
 });
 
+// 📥 Download logs as .txt
+app.get("/admin/logs/:userId/download", checkAdmin, (req, res) => {
+  const { userId } = req.params;
+  const logFile = join(logsDir, `${userId}.log`);
+  if (!fs.existsSync(logFile)) return res.status(404).send("No logs found.");
+
+  res.setHeader("Content-Disposition", `attachment; filename="${userId}_logs.txt"`);
+  res.setHeader("Content-Type", "text/plain");
+  res.send(fs.readFileSync(logFile, "utf8"));
+});
+
 // === Telegram Bot ===
 if (process.env.TELEGRAM_BOT_TOKEN) {
   const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
