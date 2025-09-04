@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luna Admin Panel</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:#eee; margin:0; padding:20px; }
+    h1 { color:#2d6cdf; }
+    .card { background:#222; padding:15px; margin:15px 0; border-radius:8px; border:1px solid #444; }
+    button { padding:6px 12px; border:none; border-radius:6px; background:#2d6cdf; color:white; cursor:pointer; }
+    button:hover { background:#1a4bb8; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th, td { padding:8px; border:1px solid #444; text-align:left; }
+    th { background:#333; }
+  </style>
+</head>
+<body>
+  <h1>⚙️ Luna Admin Dashboard</h1>
+
+  <div class="card">
+    <h2>System Status</h2>
+    <pre id="status">Loading...</pre>
+    <button onclick="loadStatus()">🔄 Refresh</button>
+  </div>
+
+  <div class="card">
+    <h2>Active Users</h2>
+    <table>
+      <thead>
+        <tr><th>User ID</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="userTable"></tbody>
+    </table>
+    <button onclick="loadUsers()">🔄 Refresh Users</button>
+  </div>
+
+  <script>
+    async function loadStatus() {
+      try {
+        const res = await fetch("/status");
+        const data = await res.json();
+        document.getElementById("status").innerText = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("status").innerText = "⚠️ Error: " + err.message;
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch("/admin/users");
+        const users = await res.json();
+        const tbody = document.getElementById("userTable");
+        tbody.innerHTML = "";
+        users.forEach(userId => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${userId}</td>
+            <td><button onclick="resetUser('${userId}')">🗑 Reset</button></td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        alert("⚠️ Failed to load users: " + err.message);
+      }
+    }
+
+    async function resetUser(userId) {
+      if (!confirm(`Reset memory for ${userId}?`)) return;
+      try {
+        await fetch("/reset/" + userId, { method:"DELETE" });
+        alert("✅ Memory reset for " + userId);
+        loadUsers();
+      } catch (err) {
+        alert("⚠️ Error: " + err.message);
+      }
+    }
+
+    // Auto-load on start
+    loadStatus();
+    loadUsers();
+  </script>
+</body>
+</html>
