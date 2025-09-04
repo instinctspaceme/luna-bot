@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Luna Web Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    #chat {
+      width: 90%;
+      max-width: 600px;
+      height: 400px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .msg {
+      margin: 5px 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+    .user {
+      background: #007bff;
+      color: white;
+      align-self: flex-end;
+    }
+    .bot {
+      background: #e9ecef;
+      color: black;
+      align-self: flex-start;
+    }
+    #controls {
+      display: flex;
+      gap: 5px;
+      width: 90%;
+      max-width: 600px;
+    }
+    #message {
+      flex-grow: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button.send {
+      background: #007bff;
+      color: white;
+    }
+    button.reset {
+      background: #dc3545;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h2>💬 Luna Web Chat</h2>
+  <div id="chat"></div>
+  <div id="controls">
+    <input id="message" placeholder="Type your message..." />
+    <button class="send" onclick="sendMessage()">Send</button>
+    <button class="reset" onclick="resetChat()">Reset</button>
+  </div>
+
+  <script>
+    const userId = "web_" + Math.random().toString(36).substring(2, 8);
+
+    function append(msg, cls) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.classList.add("msg", cls);
+      div.textContent = msg;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("message");
+      const text = input.value.trim();
+      if (!text) return;
+
+      append("You: " + text, "user");
+      input.value = "";
+
+      try {
+        const res = await fetch("/public-chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, message: text }),
+        });
+
+        const data = await res.json();
+        append("Luna: " + data.reply, "bot");
+      } catch (err) {
+        append("⚠️ Error: " + err.message, "bot");
+      }
+    }
+
+    async function resetChat() {
+      await fetch("/reset/" + userId, { method: "DELETE" });
+      document.getElementById("chat").innerHTML = "";
+      append("✅ Chat memory reset.", "bot");
+    }
+  </script>
+</body>
+</html>
