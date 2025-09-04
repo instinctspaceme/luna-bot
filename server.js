@@ -27,9 +27,22 @@ function saveMemory() {
   fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
 }
 
+// === Logging Setup ===
+const logsDir = join(__dirname, "logs");
+if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir);
+
+function logMessage(userId, role, content) {
+  const logFile = join(logsDir, `${userId}.log`);
+  const timestamp = new Date().toISOString();
+  const line = `[${timestamp}] ${role.toUpperCase()}: ${content}\n`;
+  fs.appendFileSync(logFile, line);
+}
+
+// === Core Chat Function ===
 async function chatWithLuna(userId, message) {
   if (!memory[userId]) memory[userId] = { messages: [] };
   memory[userId].messages.push({ role: "user", content: message });
+  logMessage(userId, "user", message);
 
   const messages = [
     { role: "system", content: "You are Luna, a friendly helpful AI assistant." },
@@ -43,6 +56,8 @@ async function chatWithLuna(userId, message) {
 
   const reply = response.choices[0].message.content;
   memory[userId].messages.push({ role: "assistant", content: reply });
+  logMessage(userId, "assistant", reply);
+
   saveMemory();
   return reply;
 }
@@ -94,6 +109,15 @@ app.get("/admin/history/:userId", checkAdmin, (req, res) => {
   const { userId } = req.params;
   if (!memory[userId]) return res.status(404).json({ error: "User not found" });
   res.json(memory[userId].messages || []);
+});
+
+// 📂 View logs
+app.get("/admin/logs/:userId", checkAdmin, (req, res) => {
+  const { userId } = req.params;
+  const logFile = join(logsDir, `${userId}.log`);
+  if (!fs.existsSync(logFile)) return res.status(404).send("No logs found.");
+  const logs = fs.readFileSync(logFile, "utf8");
+  res.type("text/plain").send(logs);
 });
 
 // === Telegram Bot ===
