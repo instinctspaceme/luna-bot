@@ -13,15 +13,16 @@ const PORT = process.env.PORT || 10000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const memoryFile = "memory.json";
 
+// 🧠 Load memory if exists
 let memory = {};
 if (fs.existsSync(memoryFile)) {
   memory = JSON.parse(fs.readFileSync(memoryFile));
 }
-
 function saveMemory() {
   fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
 }
 
+// 🔮 AI Response
 async function getAIResponse(userId, message) {
   if (!process.env.OPENAI_API_KEY) return "❌ Missing OpenAI API key.";
   if (!memory[userId]) memory[userId] = [];
@@ -32,6 +33,7 @@ async function getAIResponse(userId, message) {
       model: "gpt-4o-mini",
       messages: memory[userId],
     });
+
     const reply = response.choices[0].message.content;
     memory[userId].push({ role: "assistant", content: reply });
     saveMemory();
@@ -42,14 +44,14 @@ async function getAIResponse(userId, message) {
   }
 }
 
-// 🌐 Web UI
+// 🌐 Web UI route
 app.post("/public-chat", async (req, res) => {
   const { userId, message } = req.body;
   const reply = await getAIResponse(userId, message);
   res.json({ reply });
 });
 
-// Reset for Web
+// Reset (Web)
 app.delete("/reset/:userId", (req, res) => {
   const { userId } = req.params;
   delete memory[userId];
@@ -57,7 +59,7 @@ app.delete("/reset/:userId", (req, res) => {
   res.json({ success: true });
 });
 
-// 🔑 Admin reset (for big memory)
+// 🔑 Admin reset
 app.post("/admin_reset", (req, res) => {
   const { targetUserId, token } = req.body;
   if (token !== process.env.ADMIN_TOKEN) {
@@ -119,6 +121,7 @@ if (process.env.TELEGRAM_TOKEN) {
   console.log("🤖 Telegram bot started!");
 }
 
+// 🚀 Start Web server
 app.listen(PORT, () => {
   console.log(`🚀 Luna Bot running on port ${PORT}`);
 });
