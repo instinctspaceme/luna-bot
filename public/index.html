@@ -131,6 +131,7 @@
             <button onclick="resetUser('${userId}')">🗑 Reset</button>
             <button onclick="viewHistory('${userId}')">📜 History</button>
             <button onclick="viewLogs('${userId}')">📂 Logs</button>
+            <button onclick="downloadLogs('${userId}')">⬇️ Export Logs</button>
           </td>
         `;
         tbody.appendChild(row);
@@ -174,6 +175,11 @@
       }
       const text = await res.text();
       document.getElementById("history").innerText = text || "No logs found.";
+    }
+
+    async function downloadLogs(userId) {
+      if (!adminToken) return alert("⛔ Enter token first!");
+      window.open(`/admin/logs/${userId}/download?token=${adminToken}`, "_blank");
     }
   </script>
 </body>
