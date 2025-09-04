@@ -155,6 +155,10 @@ app.get("/status", (req, res) => {
     uptime: process.uptime().toFixed(2) + "s",
   });
 });
+// 📋 Admin: List active users
+app.get("/admin/users", (req, res) => {
+  res.json(Object.keys(memory));
+});
 
 // 📱 Telegram Bot
 if (process.env.TELEGRAM_TOKEN) {
