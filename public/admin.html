@@ -3,52 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <title>Luna Admin</title>
-  <style>
-    body { font-family: Arial; margin: 20px; }
-    img { border-radius: 10px; margin: 10px 0; }
-  </style>
 </head>
 <body>
-  <h1>🛠️ Luna Admin Panel</h1>
-
-  <h2>Current Avatar</h2>
-  <img src="luna_avatar.png?ts=${Date.now()}" id="currentAvatar" width="120" />
-
-  <h2>Change Avatar</h2>
-  <form id="avatarForm" enctype="multipart/form-data">
-    <input type="file" name="avatar" accept="image/*" required />
-    <button type="submit">Upload</button>
-  </form>
-  <p id="avatarStatus"></p>
-
-  <h2>User Sessions</h2>
-  <pre id="sessions"></pre>
-
-  <h2>Logs</h2>
-  <pre id="logs"></pre>
+  <h2>🌙 Luna Admin Panel - Avatar Gallery</h2>
+  <img id="currentAvatar" src="luna_avatar.png?ts=1" width="120" />
+  <div id="gallery"></div>
 
   <script>
-    async function loadData() {
-      const s = await (await fetch("/sessions")).json();
-      document.getElementById("sessions").innerText = JSON.stringify(s, null, 2);
+    async function loadAvatars() {
+      const res = await fetch("/avatars");
+      const avatars = await res.json();
+      const gallery = document.getElementById("gallery");
+      gallery.innerHTML = "";
 
-      const l = await (await fetch("/logs")).json();
-      document.getElementById("logs").innerText = JSON.stringify(l, null, 2);
-    }
-    loadData();
-
-    document.getElementById("avatarForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-
-      const res = await fetch("/upload-avatar", {
-        method: "POST",
-        body: formData,
+      avatars.forEach(av => {
+        const div = document.createElement("div");
+        div.innerHTML = `
+          <img src="avatars/${av}" width="80" style="margin:5px;" />
+          <button onclick="setAvatar('${av}')">Set</button>
+        `;
+        gallery.appendChild(div);
       });
+    }
 
-      document.getElementById("avatarStatus").innerText = await res.text();
+    async function setAvatar(name) {
+      await fetch(`/set-avatar/${name}`, { method: "POST" });
       document.getElementById("currentAvatar").src = "luna_avatar.png?ts=" + Date.now();
-    });
+      alert("✅ Avatar updated!");
+    }
+
+    loadAvatars();
   </script>
 </body>
 </html>
