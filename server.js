@@ -124,8 +124,21 @@ app.post("/set-avatar/:name", (req, res) => {
   res.send(`✅ Avatar switched to ${avatarName}`);
 });
 
-// -------- Start Server --------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+// -------- Telegram Webhook Setup --------
+app.use(bot.webhookCallback("/telegram-webhook"));
 
-bot.launch();
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+
+  // Set webhook on startup
+  if (process.env.RENDER_EXTERNAL_URL) {
+    const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/telegram-webhook`;
+    try {
+      await bot.telegram.setWebhook(webhookUrl);
+      console.log(`✅ Telegram webhook set: ${webhookUrl}`);
+    } catch (err) {
+      console.error("Failed to set Telegram webhook:", err);
+    }
+  }
+});
