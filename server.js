@@ -17,7 +17,6 @@ app.use(express.static("public"));
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-// -------- Memory Storage --------
 let sessions = {};
 let logs = [];
 
@@ -36,10 +35,20 @@ app.post("/chat", async (req, res) => {
 
     const reply = response.choices[0].message.content;
     sessions[user].push({ role: "assistant", content: reply });
-
     logs.push({ user, message, reply, time: new Date() });
 
-    res.json({ reply });
+    // Generate TTS audio
+    const audioResp = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: reply,
+    });
+
+    const audioFile = `public/reply_${Date.now()}.mp3`;
+    const buffer = Buffer.from(await audioResp.arrayBuffer());
+    fs.writeFileSync(audioFile, buffer);
+
+    res.json({ reply, audio: audioFile.replace("public/", "") });
   } catch (err) {
     console.error("OpenAI Error:", err);
     res.status(500).send("OpenAI API error.");
@@ -51,7 +60,7 @@ bot.start(async (ctx) => {
   try {
     await ctx.replyWithPhoto(
       { source: "public/luna_avatar.png" },
-      { caption: "🌙 Hi, I’m Luna — your AI assistant!" }
+      { caption: "🌙 Hi, I’m Luna — your AI companion!" }
     );
   } catch (err) {
     console.error("Telegram Error:", err);
@@ -75,40 +84,48 @@ bot.on("text", async (ctx) => {
 
     logs.push({ user: userId, message: ctx.message.text, reply, time: new Date() });
 
+    // Send text
     await ctx.reply(reply);
+
+    // Send voice
+    const audioResp = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: reply,
+    });
+
+    const audioFile = `reply_${Date.now()}.ogg`;
+    const buffer = Buffer.from(await audioResp.arrayBuffer());
+    fs.writeFileSync(audioFile, buffer);
+    await ctx.replyWithVoice({ source: audioFile });
   } catch (err) {
     console.error("Telegram Reply Error:", err);
     await ctx.reply("⚠️ Sorry, I had trouble replying.");
   }
 });
 
-bot.launch();
-
-// -------- Admin Routes --------
-app.get("/sessions", (req, res) => res.json(sessions));
-app.get("/logs", (req, res) => res.json(logs));
-
-app.post("/reset/:user", (req, res) => {
-  const user = req.params.user;
-  delete sessions[user];
-  res.send(`✅ Session reset for ${user}`);
+// -------- Avatar Gallery --------
+app.get("/avatars", (req, res) => {
+  const avatarsPath = path.join(__dirname, "public", "avatars");
+  fs.readdir(avatarsPath, (err, files) => {
+    if (err) return res.status(500).send("Error loading avatars.");
+    res.json(files);
+  });
 });
 
-// -------- Avatar Upload --------
-app.post("/upload-avatar", upload.single("avatar"), (req, res) => {
-  if (!req.file) return res.status(400).send("No file uploaded.");
+app.post("/set-avatar/:name", (req, res) => {
+  const avatarName = req.params.name;
+  const sourcePath = path.join(__dirname, "public", "avatars", avatarName);
+  const targetPath = path.join(__dirname, "public", "luna_avatar.png");
 
-  const newPath = path.join(__dirname, "public", "luna_avatar.png");
+  if (!fs.existsSync(sourcePath)) return res.status(404).send("Avatar not found.");
 
-  fs.rename(req.file.path, newPath, (err) => {
-    if (err) {
-      console.error("Error saving avatar:", err);
-      return res.status(500).send("Failed to update avatar.");
-    }
-    res.send("✅ Avatar updated successfully!");
-  });
+  fs.copyFileSync(sourcePath, targetPath);
+  res.send(`✅ Avatar switched to ${avatarName}`);
 });
 
 // -------- Start Server --------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+
+bot.launch();
