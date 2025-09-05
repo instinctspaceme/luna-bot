@@ -10,9 +10,7 @@
 
   <div id="top">
     <label><input type="checkbox" id="ttsToggle" checked /> Play voice replies</label>
-    <span id="avatarWrap">
-      <img id="activeAvatar" class="avatar" src="" alt="avatar"/>
-    </span>
+    <img id="activeAvatar" class="avatar" src="" alt="avatar"/>
   </div>
 
   <div id="chat"></div>
@@ -20,12 +18,24 @@
   <div id="controls">
     <input id="msg" placeholder="Type a message..." />
     <button id="sendBtn">Send</button>
-    <button id="recBtn">🎙️ Hold to speak</button>
+    <button id="recBtn">🎙️ Hold to speak (quick)</button>
+  </div>
+
+  <div class="card">
+    <h3>🔊 Live Call (Walkie-Talkie)</h3>
+    <p><b>Start Call</b> → hold <b>SPACE</b> to talk → release to send. Watch <i>live partial</i> transcripts.</p>
+    <button id="callBtn">Start Call</button>
+    <span id="callStatus"></span>
+    <div id="partials" class="partials"></div>
   </div>
 
   <audio id="player" controls style="display:none"></audio>
 
   <script>
+    const SID_KEY = "luna_sid";
+    let sid = localStorage.getItem(SID_KEY);
+    if (!sid) { sid = Math.random().toString(36).slice(2); localStorage.setItem(SID_KEY, sid); }
+
     const chat = document.getElementById("chat");
     const msg = document.getElementById("msg");
     const sendBtn = document.getElementById("sendBtn");
@@ -33,14 +43,13 @@
     const player = document.getElementById("player");
     const ttsToggle = document.getElementById("ttsToggle");
     const activeAvatarEl = document.getElementById("activeAvatar");
+    const callBtn = document.getElementById("callBtn");
+    const callStatus = document.getElementById("callStatus");
+    const partials = document.getElementById("partials");
 
-    let mediaRecorder, chunks = [];
-
-    async function loadSettings() {
-      const s = await (await fetch("/api/settings")).json();
-      activeAvatarEl.src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
-    }
-    loadSettings();
+    let ws = null;
+    let callStream = null;
+    let callRecorder = null;
 
     function addLine(html) {
       const div = document.createElement("div");
@@ -50,17 +59,21 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
+    async function loadSettings() {
+      const s = await (await fetch("/api/settings")).json();
+      activeAvatarEl.src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
+    }
+    loadSettings();
+
     async function sendMessage() {
       const text = msg.value.trim();
       if (!text) return;
       msg.value = "";
-
       addLine(`<div class="user"><b>You:</b> ${text}</div>`);
-
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, tts: ttsToggle.checked })
+        body: JSON.stringify({ message: text, tts: ttsToggle.checked, sid })
       });
       const data = await res.json();
       addLine(`<div class="luna"><img class="avatar" src="/avatars/${data.activeAvatar}"/> <b>Luna:</b> ${data.reply}</div>`);
@@ -68,40 +81,111 @@
         player.src = data.audio + "?ts=" + Date.now();
         player.play();
       }
-      loadSettings(); // refresh avatar if rotation changed
+      loadSettings();
     }
 
     sendBtn.onclick = sendMessage;
-    msg.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
+    msg.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
-    // --- Voice recording (push-to-talk) ---
-    async function startRecording() {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      chunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const form = new FormData();
-        form.append("audio", blob, "recording.webm");
-        const tr = await fetch("/api/transcribe", { method: "POST", body: form });
-        const { text } = await tr.json();
-        if (!text) { addLine(`<div class="sys">⚠️ Couldn't hear that. Try again.</div>`); return; }
-        msg.value = text;
-        await sendMessage();
+    // Quick hold-to-talk using browser SR (if available)
+    async function startQuickRecord() {
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        rec.lang = "en-US";
+        rec.interimResults = false;
+        rec.onresult = (ev) => {
+          msg.value = ev.results[0][0].transcript;
+          sendMessage();
+        };
+        rec.start();
+      } else {
+        addLine(`<div class="sys">⚠️ Browser speech recognition unavailable. Use Live Call below.</div>`);
+      }
+    }
+    function stopQuickRecord() {}
+
+    recBtn.addEventListener("mousedown", startQuickRecord);
+    recBtn.addEventListener("touchstart", startQuickRecord);
+    window.addEventListener("mouseup", stopQuickRecord);
+    window.addEventListener("touchend", stopQuickRecord);
+
+    // ===== Live Call (WebSocket) with partials =====
+    async function startCall() {
+      if (ws && ws.readyState === 1) return;
+      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/call?sid=" + sid);
+
+      ws.onopen = async () => {
+        callStatus.textContent = "Connected — hold SPACE to talk";
+        partials.textContent = "";
+        callStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        callRecorder = new MediaRecorder(callStream, { mimeType: "audio/webm" });
+
+        callRecorder.ondataavailable = (e) => {
+          if (ws && ws.readyState === 1) ws.send(e.data);
+        };
+
+        let pressing = false;
+        const down = (ev) => {
+          if (ev.code === "Space" && !pressing) {
+            pressing = true;
+            callRecorder.start(250);
+          }
+        };
+        const up = (ev) => {
+          if (ev.code === "Space" && pressing) {
+            pressing = false;
+            callRecorder.stop();
+            ws.send(JSON.stringify({ type: "segment_end" }));
+          }
+        };
+        window.addEventListener("keydown", down);
+        window.addEventListener("keyup", up);
+        ws._cleanupKeys = () => {
+          window.removeEventListener("keydown", down);
+          window.removeEventListener("keyup", up);
+        };
       };
-      mediaRecorder.start();
-    }
-    function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (data.type === "partial") {
+            partials.textContent = "… " + data.transcript;
+          } else if (data.type === "result") {
+            if (data.transcript) addLine(`<div class="user"><b>You (call):</b> ${data.transcript}</div>`);
+            addLine(`<div class="luna"><img class="avatar" src="${activeAvatarEl.src}"/> <b>Luna (call):</b> ${data.reply}</div>`);
+            partials.textContent = "";
+            if (data.audio) new Audio(data.audio + "?ts=" + Date.now()).play();
+          } else if (data.type === "error") {
+            addLine(`<div class="sys">⚠️ Call error: ${data.error}</div>`);
+          }
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        callStatus.textContent = "Disconnected";
+        partials.textContent = "";
+        if (ws && ws._cleanupKeys) ws._cleanupKeys();
+        if (callRecorder && callRecorder.state !== "inactive") callRecorder.stop();
+        if (callStream) callStream.getTracks().forEach(t => t.stop());
+        ws = null;
+      };
     }
 
-    recBtn.addEventListener("mousedown", startRecording);
-    recBtn.addEventListener("touchstart", startRecording);
-    window.addEventListener("mouseup", stopRecording);
-    window.addEventListener("touchend", stopRecording);
+    function endCall() {
+      if (ws) ws.close();
+      callStatus.textContent = "Disconnected";
+    }
+
+    callBtn.onclick = () => {
+      if (!ws || ws.readyState !== 1) {
+        callBtn.textContent = "End Call";
+        startCall();
+      } else {
+        callBtn.textContent = "Start Call";
+        endCall();
+      }
+    };
   </script>
 </body>
 </html>
