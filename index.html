@@ -2,206 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luna Chat</title>
+  <title>Luna AI</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0b0c10;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      margin: 0;
-    }
-    header {
-      padding: 1rem;
-      background: #1f2833;
-      font-size: 1.2rem;
-      font-weight: bold;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    #reset {
-      background: #c0392b;
-      border: none;
-      color: #fff;
-      padding: 0.3rem 0.6rem;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-    #reset:hover {
-      background: #e74c3c;
-    }
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 1rem;
-      background: #0b0c10;
-      display: flex;
-      flex-direction: column;
-    }
-    .message {
-      margin: 0.5rem 0;
-      padding: 0.75rem;
-      border-radius: 10px;
-      max-width: 75%;
-      word-wrap: break-word;
-    }
-    .user {
-      background: #45a29e;
-      align-self: flex-end;
-      margin-left: auto;
-    }
-    .luna {
-      background: #1f2833;
-      border: 1px solid #45a29e;
-      align-self: flex-start;
-      margin-right: auto;
-    }
-    #input-area {
-      display: flex;
-      padding: 0.5rem;
-      background: #1f2833;
-    }
-    #input {
-      flex: 1;
-      padding: 0.5rem;
-      border: none;
-      border-radius: 5px;
-    }
-    #send {
-      margin-left: 0.5rem;
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 5px;
-      background: #45a29e;
-      color: #fff;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    #send:disabled {
-      background: #555;
-    }
+    body { font-family: Arial; text-align: center; margin: 20px; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
+    .msg { margin: 5px; }
+    .user { color: blue; }
+    .assistant { color: purple; }
   </style>
 </head>
 <body>
-  <header>
-    🌙 Chat with Luna
-    <button id="reset">🗑 Reset</button>
-  </header>
+  <h1>🌙 Luna AI</h1>
+  <img id="avatar" src="luna_avatar.png?ts=1" width="120" />
+
   <div id="chat"></div>
-  <div id="input-area">
-    <input id="input" type="text" placeholder="Type a message..." />
-    <button id="send">Send</button>
-  </div>
+  <input id="message" placeholder="Type here..." />
+  <button onclick="sendMessage()">Send</button>
+  <button onclick="startVoice()">🎤 Speak</button>
 
   <script>
-    // Generate or reuse unique ID per browser session
-    const userId =
-      localStorage.getItem("luna_user_id") ||
-      "web_" + Math.random().toString(36).substring(2, 8);
-    localStorage.setItem("luna_user_id", userId);
-
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("input");
-    const send = document.getElementById("send");
-
-    // Local history fallback
-    let history = JSON.parse(localStorage.getItem("luna_chat_" + userId)) || [];
-
-    function renderHistory() {
-      chat.innerHTML = "";
-      history.forEach((msg) => addMessage(msg.text, msg.type, false));
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    function addMessage(text, className, save = true) {
-      const div = document.createElement("div");
-      div.className = "message " + className;
-      div.textContent = text;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-
-      if (save) {
-        history.push({ text, type: className });
-        localStorage.setItem("luna_chat_" + userId, JSON.stringify(history));
-      }
-    }
-
     async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
+      const msg = document.getElementById("message").value;
+      const chat = document.getElementById("chat");
 
-      addMessage(text, "user");
-      input.value = "";
-      send.disabled = true;
+      chat.innerHTML += `<div class="msg user"><b>You:</b> ${msg}</div>`;
 
-      try {
-        const res = await fetch("/public-chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, message: text })
-        });
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: "web", message: msg }),
+      });
 
-        const data = await res.json();
-        addMessage(data.reply || "Error from Luna", "luna");
-      } catch (err) {
-        console.error(err);
-        addMessage("❌ Failed to reach Luna.", "luna");
+      const data = await res.json();
+      chat.innerHTML += `<div class="msg assistant"><b>Luna:</b> ${data.reply}</div>`;
+
+      if (data.audio) {
+        const audio = new Audio(data.audio);
+        audio.play();
       }
 
-      send.disabled = false;
+      document.getElementById("message").value = "";
+      chat.scrollTop = chat.scrollHeight;
     }
 
-    send.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
-
-    // 🔥 Reset button logic
-    document.getElementById("reset").addEventListener("click", async () => {
-      if (!confirm("Reset your conversation with Luna?")) return;
-
-      try {
-        // Clear server memory
-        await fetch("/reset/" + userId, { method: "DELETE" });
-
-        // Clear browser memory
-        history = [];
-        localStorage.removeItem("luna_chat_" + userId);
-
-        // Refresh UI
-        chat.innerHTML = "";
-        addMessage("🗑 Chat reset. Start fresh with Luna!", "luna", false);
-      } catch (err) {
-        console.error("Reset failed:", err);
-        addMessage("❌ Failed to reset chat.", "luna", false);
-      }
-    });
-
-    // 🔥 Fetch server history on page load
-    async function loadHistory() {
-      try {
-        const res = await fetch("/history/" + userId);
-        const data = await res.json();
-
-        history = data.history.map((msg) => ({
-          text: msg.role === "user" ? msg.content : msg.content[0].text,
-          type: msg.role === "user" ? "user" : "luna"
-        }));
-
-        renderHistory();
-      } catch (err) {
-        console.error("Failed to load server history:", err);
-        renderHistory(); // fallback to local only
-      }
+    // Voice input using Web Speech API
+    function startVoice() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = "en-US";
+      recognition.onresult = (event) => {
+        document.getElementById("message").value = event.results[0][0].transcript;
+        sendMessage();
+      };
+      recognition.start();
     }
-
-    // Load history on page start
-    loadHistory();
   </script>
 </body>
 </html>
