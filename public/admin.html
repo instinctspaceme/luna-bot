@@ -2,83 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Luna Admin Panel</title>
+  <title>Luna Admin</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#111; color:#eee; margin:0; padding:20px; }
-    h1 { color:#2d6cdf; }
-    .card { background:#222; padding:15px; margin:15px 0; border-radius:8px; border:1px solid #444; }
-    button { padding:6px 12px; border:none; border-radius:6px; background:#2d6cdf; color:white; cursor:pointer; }
-    button:hover { background:#1a4bb8; }
-    table { width:100%; border-collapse:collapse; margin-top:10px; }
-    th, td { padding:8px; border:1px solid #444; text-align:left; }
-    th { background:#333; }
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
+    #content { display: none; }
+    pre { background: #eee; padding: 10px; }
   </style>
 </head>
 <body>
-  <h1>⚙️ Luna Admin Dashboard</h1>
-
-  <div class="card">
-    <h2>System Status</h2>
-    <pre id="status">Loading...</pre>
-    <button onclick="loadStatus()">🔄 Refresh</button>
+  <h2>🔑 Luna Admin Dashboard</h2>
+  <div id="login">
+    <input type="password" id="password" placeholder="Enter Admin Password"/>
+    <button onclick="login()">Login</button>
   </div>
-
-  <div class="card">
-    <h2>Active Users</h2>
-    <table>
-      <thead>
-        <tr><th>User ID</th><th>Actions</th></tr>
-      </thead>
-      <tbody id="userTable"></tbody>
-    </table>
-    <button onclick="loadUsers()">🔄 Refresh Users</button>
+  <div id="content">
+    <button onclick="resetAll()">Clear All Memory</button>
+    <h3>Users</h3>
+    <ul id="userList"></ul>
+    <h3>Chat History</h3>
+    <pre id="history"></pre>
   </div>
 
   <script>
-    async function loadStatus() {
-      try {
-        const res = await fetch("/status");
-        const data = await res.json();
-        document.getElementById("status").innerText = JSON.stringify(data, null, 2);
-      } catch (err) {
-        document.getElementById("status").innerText = "⚠️ Error: " + err.message;
-      }
+    let adminPassword = "";
+    async function login() {
+      adminPassword = document.getElementById("password").value;
+      document.getElementById("login").style.display = "none";
+      document.getElementById("content").style.display = "block";
+      loadUsers();
+    }
+
+    async function resetAll() {
+      await fetch("/admin/reset", { method: "POST", headers: { "x-admin-pass": adminPassword }});
+      alert("Memory cleared!");
+      loadUsers();
     }
 
     async function loadUsers() {
-      try {
-        const res = await fetch("/admin/users");
-        const users = await res.json();
-        const tbody = document.getElementById("userTable");
-        tbody.innerHTML = "";
-        users.forEach(userId => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${userId}</td>
-            <td><button onclick="resetUser('${userId}')">🗑 Reset</button></td>
-          `;
-          tbody.appendChild(row);
-        });
-      } catch (err) {
-        alert("⚠️ Failed to load users: " + err.message);
-      }
+      const res = await fetch("/admin/users", { headers: { "x-admin-pass": adminPassword }});
+      const data = await res.json();
+      const ul = document.getElementById("userList");
+      ul.innerHTML = "";
+      data.users.forEach(u => {
+        const li = document.createElement("li");
+        li.textContent = u;
+        li.onclick = async () => {
+          const hist = await fetch("/admin/history/" + u, { headers: { "x-admin-pass": adminPassword }});
+          const d = await hist.json();
+          document.getElementById("history").textContent = JSON.stringify(d.history, null, 2);
+        };
+        ul.appendChild(li);
+      });
     }
-
-    async function resetUser(userId) {
-      if (!confirm(`Reset memory for ${userId}?`)) return;
-      try {
-        await fetch("/reset/" + userId, { method:"DELETE" });
-        alert("✅ Memory reset for " + userId);
-        loadUsers();
-      } catch (err) {
-        alert("⚠️ Error: " + err.message);
-      }
-    }
-
-    // Auto-load on start
-    loadStatus();
-    loadUsers();
   </script>
 </body>
 </html>
