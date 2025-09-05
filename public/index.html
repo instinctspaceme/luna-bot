@@ -2,52 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Luna AI</title>
-  <style>
-    body { font-family: Arial; text-align: center; margin: 20px; }
-    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
-    .msg { margin: 5px; text-align: left; }
-    .user { color: #0b63ff; }
-    .assistant { color: #7a2cff; }
-    #meta { margin-bottom: 12px; opacity: 0.8; }
-  </style>
+  <title>Luna Web Chat</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>🌙 Luna AI</h1>
-  <div id="meta">
-    <img id="avatar" src="luna_avatar.png?ts=1" width="100" style="border-radius:12px;vertical-align:middle"/>
-    <span id="personality" style="margin-left:8px; font-size:14px;">loading…</span>
+  <h1>🌙 Luna Web Chat</h1>
+
+  <div id="top">
+    <label><input type="checkbox" id="ttsToggle" checked /> Play voice replies</label>
+    <span id="avatarWrap">
+      <img id="activeAvatar" class="avatar" src="" alt="avatar"/>
+    </span>
   </div>
 
   <div id="chat"></div>
-  <input id="message" placeholder="Type here..." />
-  <button onclick="sendMessage()">Send</button>
-  <button onclick="startVoice()">🎤 Speak</button>
+
+  <div id="controls">
+    <input id="msg" placeholder="Type a message..." />
+    <button id="sendBtn">Send</button>
+    <button id="recBtn">🎙️ Hold to speak</button>
+  </div>
+
+  <audio id="player" controls style="display:none"></audio>
 
   <script>
+    const chat = document.getElementById("chat");
+    const msg = document.getElementById("msg");
+    const sendBtn = document.getElementById("sendBtn");
+    const recBtn = document.getElementById("recBtn");
+    const player = document.getElementById("player");
+    const ttsToggle = document.getElementById("ttsToggle");
+    const activeAvatarEl = document.getElementById("activeAvatar");
+
+    let mediaRecorder, chunks = [];
+
     async function loadSettings() {
-      const s = await (await fetch("/settings")).json();
-      document.getElementById("personality").innerText = `Personality: ${s.personality}`;
-      document.getElementById("avatar").src = "luna_avatar.png?ts=" + Date.now();
+      const s = await (await fetch("/api/settings")).json();
+      activeAvatarEl.src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
     }
     loadSettings();
 
-    async function sendMessage() {
-      const msg = document.getElementById("message").value;
-      if (!msg) return;
-      const chat = document.getElementById("chat");
-      chat.innerHTML += `<div class="msg user"><b>You:</b> ${msg}</div>`;
+    function addLine(html) {
+      const div = document.createElement("div");
+      div.className = "msg-line";
+      div.innerHTML = html;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
 
-      const res = await fetch("/chat", {
+    async function sendMessage() {
+      const text = msg.value.trim();
+      if (!text) return;
+      msg.value = "";
+
+      addLine(`<div class="user"><b>You:</b> ${text}</div>`);
+
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: "web", message: msg })
+        body: JSON.stringify({ message: text, tts: ttsToggle.checked })
       });
-
       const data = await res.json();
-      chat.innerHTML += `<div class="msg assistant"><b>Luna:</b> ${data.reply}</div>`;
+      addLine(`<div class="luna"><img class="avatar" src="/avatars/${data.activeAvatar}"/> <b>Luna:</b> ${data.reply}</div>`);
+      if (data.audio && ttsToggle.checked) {
+        player.src = data.audio + "?ts=" + Date.now();
+        player.play();
+      }
+      loadSettings(); // refresh avatar if rotation changed
+    }
 
-      if (data.audio) new Audio(data.audio).play();
+    sendBtn.onclick = sendMessage;
+    msg.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
 
-      document.getElementById("message").value = "";
-      chat.scrollTop = chat.scroll
+    // --- Voice recording (push-to-talk) ---
+    async function startRecording() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const form = new FormData();
+        form.append("audio", blob, "recording.webm");
+        const tr = await fetch("/api/transcribe", { method: "POST", body: form });
+        const { text } = await tr.json();
+        if (!text) { addLine(`<div class="sys">⚠️ Couldn't hear that. Try again.</div>`); return; }
+        msg.value = text;
+        await sendMessage();
+      };
+      mediaRecorder.start();
+    }
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    }
+
+    recBtn.addEventListener("mousedown", startRecording);
+    recBtn.addEventListener("touchstart", startRecording);
+    window.addEventListener("mouseup", stopRecording);
+    window.addEventListener("touchend", stopRecording);
+  </script>
+</body>
+</html>
