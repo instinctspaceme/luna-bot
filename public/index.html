@@ -1,186 +1,303 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Luna AI</title>
+  <meta charset="utf-8" />
+  <title>Luna — Virtual Companion</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; background:#111; color:#eee; margin:0; padding:0; }
-    header { background:#2d6cdf; padding:15px; text-align:center; font-size:20px; font-weight:bold; }
-    nav { display:flex; justify-content:center; background:#222; }
-    nav button { flex:1; padding:12px; border:none; background:#222; color:#eee; cursor:pointer; }
-    nav button.active { background:#2d6cdf; }
-    .tab { display:none; padding:20px; }
-    .tab.active { display:block; }
-    .chat-box { border:1px solid #444; height:300px; overflow-y:auto; padding:10px; background:#000; }
-    .chat-input { display:flex; margin-top:10px; }
-    .chat-input input { flex:1; padding:8px; border:none; }
-    .chat-input button { padding:8px; background:#2d6cdf; color:#fff; border:none; cursor:pointer; }
-    .card { background:#222; padding:15px; margin:15px 0; border-radius:8px; border:1px solid #444; }
-    button { padding:6px 12px; border:none; border-radius:6px; background:#2d6cdf; color:white; cursor:pointer; }
-    button:hover { background:#1a4bb8; }
-    table { width:100%; border-collapse:collapse; margin-top:10px; }
-    th, td { padding:8px; border:1px solid #444; text-align:left; }
-    th { background:#333; }
+    body { font-family: system-ui, Arial; margin:0; background:#0b0e14; color:#e6eef8; }
+    header { background:#1f2937; padding:12px 16px; display:flex; gap:12px; align-items:center; }
+    header img { width:48px; height:48px; border-radius:50%; }
+    header h1 { margin:0; font-size:18px; }
+    nav { display:flex; gap:6px; padding:8px; background:#0f1724; }
+    nav button { padding:8px 12px; border-radius:8px; border:1px solid #23303d; background:#111827; color:#e6eef8; cursor:pointer; }
+    nav button.active { background:#2563eb; }
+    main { display:flex; gap:20px; padding:16px; max-width:1100px; margin:0 auto; }
+    .left { flex:1; display:flex; flex-direction:column; gap:12px; }
+    .chat { background:#0b1220; border:1px solid #172033; border-radius:10px; padding:12px; height:60vh; overflow:auto; }
+    .inputRow { display:flex; gap:8px; }
+    input[type="text"] { flex:1; padding:10px; border-radius:8px; border:1px solid #22303a; background:#071226; color:#e6eef8; }
+    button.primary { background:#2563eb; border:none; color:white; padding:10px 14px; border-radius:8px; cursor:pointer; }
+    .right { width:360px; }
+    .card { background:#071126; border:1px solid #122032; padding:12px; border-radius:8px; margin-bottom:12px; }
+    .msg.user { text-align:right; color:#9ad0ff; margin:8px 0; }
+    .msg.bot { text-align:left; color:#d6e6ff; margin:8px 0; }
+    pre { white-space:pre-wrap; word-wrap:break-word; }
+    .controls small { color:#9aa7b8; }
   </style>
 </head>
 <body>
-  <header>🤖 Luna AI</header>
+  <header>
+    <img src="https://i.imgur.com/3Z3Z3Z3.png" alt="avatar" id="avatar">
+    <div>
+      <h1>🌙 Luna — Virtual Companion</h1>
+      <small id="subtitle">Voice + text chat • Web + Telegram</small>
+    </div>
+  </header>
+
   <nav>
-    <button id="chatTabBtn" class="active" onclick="showTab('chat')">💬 Chat</button>
-    <button id="adminTabBtn" onclick="showTab('admin')">⚙️ Admin</button>
+    <button id="tabChat" class="active" onclick="showTab('chat')">Chat</button>
+    <button id="tabAdmin" onclick="showTab('admin')">Admin</button>
   </nav>
 
-  <!-- Chat Tab -->
-  <div id="chat" class="tab active">
-    <h2>💬 Chat with Luna</h2>
-    <div class="chat-box" id="chatBox"></div>
-    <div class="chat-input">
-      <input type="text" id="chatInput" placeholder="Type a message...">
-      <button onclick="sendMessage()">Send</button>
-    </div>
-  </div>
+  <main>
+    <div class="left">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>Luna</strong><br/>
+            <small id="status">checking status…</small>
+          </div>
+          <div>
+            <button class="primary" id="voiceBtn">🎙️ Speak</button>
+          </div>
+        </div>
+      </div>
 
-  <!-- Admin Tab -->
-  <div id="admin" class="tab">
-    <h2>⚙️ Admin Dashboard</h2>
-    <div class="card">
-      <label>🔑 Enter Admin Token:</label>
-      <input type="password" id="token" placeholder="Enter token">
-      <button onclick="setToken()">Unlock</button>
+      <div id="chatTab" class="card">
+        <div id="chat" class="chat"></div>
+        <div class="inputRow">
+          <input id="textInput" placeholder="Type or use the mic (try: /imagine a friendly robot on the moon)">
+          <button class="primary" id="sendBtn">Send</button>
+          <button id="ttsBtn">🔊 Voice Reply</button>
+        </div>
+        <div class="controls">
+          <small>Commands: <code>/imagine &lt;prompt&gt;</code> (image), <code>/voice &lt;text&gt;</code> (generate audio)</small>
+        </div>
+      </div>
+
+      <!-- Admin tab (hidden by default) -->
+      <div id="adminTab" style="display:none;">
+        <div class="card">
+          <label>Admin token: <input id="adminToken" type="password" /></label>
+          <button onclick="unlock()">Unlock</button>
+        </div>
+
+        <div class="card">
+          <h3>System Status</h3>
+          <pre id="adminStatus">Locked</pre>
+          <button onclick="loadStatus()">Refresh</button>
+        </div>
+
+        <div class="card">
+          <h3>Users</h3>
+          <table style="width:100%"><thead><tr><th>User</th><th>Actions</th></tr></thead><tbody id="usersTable"></tbody></table>
+          <button onclick="loadUsers()">Refresh Users</button>
+          <button onclick="resetAll()">Reset All</button>
+        </div>
+
+        <div class="card">
+          <h3>History / Logs</h3>
+          <pre id="historyArea">Select a user and click History or Logs</pre>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
-      <h3>System Status</h3>
-      <pre id="status">Locked 🔒</pre>
-      <button onclick="loadStatus()">🔄 Refresh</button>
-    </div>
+    <aside class="right">
+      <div class="card">
+        <strong>Avatar</strong><br/>
+        <img id="avatarBig" src="https://i.imgur.com/3Z3Z3Z3.png" style="width:100%;border-radius:8px;margin-top:8px;" />
+        <p><small>Make Luna yours: replace the avatar image URL in public/index.html or serve your own avatar file.</small></p>
+      </div>
 
-    <div class="card">
-      <h3>Active Users</h3>
-      <table>
-        <thead><tr><th>User ID</th><th>Actions</th></tr></thead>
-        <tbody id="userTable"></tbody>
-      </table>
-      <button onclick="loadUsers()">🔄 Refresh Users</button>
-      <button onclick="resetAll()">🗑 Reset All</button>
-    </div>
-
-    <div class="card">
-      <h3>User Chat History & Logs</h3>
-      <pre id="history">Select a user...</pre>
-    </div>
-  </div>
+      <div class="card">
+        <strong>Controls</strong>
+        <p><small>Use mic to speak — browser will transcribe (Web Speech API) and send text to Luna. Use Voice Reply to request TTS playback.</small></p>
+      </div>
+    </aside>
+  </main>
 
   <script>
-    // ========= Tab Switcher =========
-    function showTab(tab) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-      document.getElementById(tab).classList.add('active');
-      document.getElementById(tab + 'TabBtn').classList.add('active');
+    // ---------- UI tabs ----------
+    function showTab(name) {
+      document.getElementById("chatTab").style.display = name === "chat" ? "block" : "none";
+      document.getElementById("adminTab").style.display = name === "admin" ? "block" : "none";
+      document.getElementById("tabChat").classList.toggle("active", name === "chat");
+      document.getElementById("tabAdmin").classList.toggle("active", name === "admin");
     }
 
-    // ========= Chat Logic =========
-    const userId = "web-" + Math.floor(Math.random() * 1000000);
-    async function sendMessage() {
-      const input = document.getElementById("chatInput");
-      const chatBox = document.getElementById("chatBox");
-      const msg = input.value.trim();
-      if (!msg) return;
+    // ---------- basic state ----------
+    const userId = "web_" + Math.random().toString(36).slice(2,8);
+    const chatEl = document.getElementById("chat");
+    const textInput = document.getElementById("textInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const voiceBtn = document.getElementById("voiceBtn");
+    const ttsBtn = document.getElementById("ttsBtn");
 
-      chatBox.innerHTML += `<div><b>You:</b> ${msg}</div>`;
-      input.value = "";
-
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, message: msg })
-      });
-      const data = await res.json();
-      chatBox.innerHTML += `<div><b>Luna:</b> ${data.reply}</div>`;
-      chatBox.scrollTop = chatBox.scrollHeight;
+    function appendMsg(who, text) {
+      const d = document.createElement("div");
+      d.className = 'msg ' + (who === 'me' ? 'user' : 'bot');
+      d.innerText = (who === 'me' ? 'You: ' : 'Luna: ') + text;
+      chatEl.appendChild(d);
+      chatEl.scrollTop = chatEl.scrollHeight;
     }
 
-    // ========= Admin Logic =========
-    let adminToken = "";
+    async function sendText(msg) {
+      appendMsg('me', msg);
+      try {
+        const r = await fetch('/public-chat', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ userId, message: msg })
+        });
+        const j = await r.json();
+        if (j.type === 'image') {
+          const img = document.createElement('img'); img.src = j.reply; img.style.maxWidth='100%'; chatEl.appendChild(img);
+        } else if (j.type === 'audio') {
+          const audio = document.createElement('audio'); audio.controls=true; audio.src = j.reply; chatEl.appendChild(audio);
+        } else {
+          appendMsg('bot', j.reply || 'No reply');
+        }
+      } catch (e) {
+        appendMsg('bot', '⚠️ Error: ' + (e.message || e));
+      }
+    }
 
-    function setToken() {
-      adminToken = document.getElementById("token").value.trim();
-      alert("✅ Token set. You can now manage Luna.");
+    sendBtn.onclick = () => {
+      const txt = textInput.value.trim();
+      if (!txt) return;
+      sendText(txt);
+      textInput.value = '';
+    };
+
+    // Keyboard enter
+    textInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') sendBtn.click(); });
+
+    // ---------- Web Speech API (voice input) ----------
+    let recognition;
+    let recognizing = false;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        sendText(transcript);
+      };
+      recognition.onend = () => { recognizing = false; voiceBtn.innerText = '🎙️ Speak'; };
+    } else {
+      voiceBtn.disabled = true;
+      voiceBtn.title = "Speech recognition not supported in this browser";
+    }
+
+    voiceBtn.onclick = () => {
+      if (!recognition) return alert('Speech recognition not supported');
+      if (recognizing) {
+        recognition.stop();
+        recognizing = false;
+        voiceBtn.innerText = '🎙️ Speak';
+      } else {
+        recognition.start();
+        recognizing = true;
+        voiceBtn.innerText = '⏹ Stop';
+      }
+    };
+
+    // ---------- Voice Reply (request server TTS) ----------
+    ttsBtn.onclick = async () => {
+      const txt = textInput.value.trim() || 'Hello, how can I help?';
+      appendMsg('me', '(voice request) ' + txt);
+      try {
+        const r = await fetch('/public-voice', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ userId, message: txt })
+        });
+        const j = await r.json();
+        if (j.audioUrl) {
+          const audio = document.createElement('audio'); audio.controls=true; audio.src = j.audioUrl; chatEl.appendChild(audio);
+          appendMsg('bot', '[voice reply]');
+        } else {
+          appendMsg('bot', '⚠️ Voice generation failed');
+        }
+      } catch (e) {
+        appendMsg('bot', '⚠️ Error: ' + (e.message || e));
+      }
+      textInput.value = '';
+    };
+
+    // ---------- Admin functions ----------
+    let adminToken = '';
+    function unlock() {
+      adminToken = document.getElementById('adminToken').value.trim();
+      if (!adminToken) { alert('Enter token'); return; }
+      loadStatus();
+      loadUsers();
+      showTab('admin');
     }
 
     async function loadStatus() {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      const res = await fetch("/status", { headers: { "x-admin-token": adminToken } });
-      const data = await res.json();
-      document.getElementById("status").innerText = JSON.stringify(data, null, 2);
+      try {
+        const r = await fetch('/status', { headers: { 'x-admin-token': adminToken } });
+        const j = await r.json();
+        document.getElementById('adminStatus').innerText = JSON.stringify(j, null, 2);
+      } catch (e) { document.getElementById('adminStatus').innerText = 'Error: ' + e.message; }
     }
 
     async function loadUsers() {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      const res = await fetch("/admin/users?token=" + adminToken);
-      const users = await res.json();
-      const tbody = document.getElementById("userTable");
-      tbody.innerHTML = "";
-      users.forEach(userId => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${userId}</td>
-          <td>
-            <button onclick="resetUser('${userId}')">🗑 Reset</button>
-            <button onclick="viewHistory('${userId}')">📜 History</button>
-            <button onclick="viewLogs('${userId}')">📂 Logs</button>
-            <button onclick="downloadLogs('${userId}')">⬇️ Export Logs</button>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
+      try {
+        const r = await fetch('/admin/users?token=' + encodeURIComponent(adminToken));
+        const users = await r.json();
+        const tbody = document.getElementById('usersTable');
+        tbody.innerHTML = '';
+        users.forEach(u => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${u}</td><td>
+            <button onclick="resetUser('${u}')">Reset</button>
+            <button onclick="viewHistory('${u}')">History</button>
+            <button onclick="viewLogs('${u}')">Logs</button>
+            <button onclick="downloadLogs('${u}')">Download</button>
+          </td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { console.error(e); alert('Failed to load users'); }
     }
 
-    async function resetUser(userId) {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      if (!confirm(`Reset memory for ${userId}?`)) return;
-      await fetch("/reset/" + userId + "?token=" + adminToken, { method: "DELETE" });
-      alert("✅ Memory reset for " + userId);
-      loadUsers();
+    async function resetUser(u) {
+      if (!confirm('Reset ' + u + '?')) return;
+      await fetch('/reset/' + u + '?token=' + encodeURIComponent(adminToken), { method:'DELETE' });
+      alert('Reset done'); loadUsers();
     }
 
     async function resetAll() {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      if (!confirm("⚠️ Reset ALL users?")) return;
-      await fetch("/admin/reset-all?token=" + adminToken, { method: "DELETE" });
-      alert("✅ All users reset.");
-      loadUsers();
+      if (!confirm('Reset ALL users?')) return;
+      await fetch('/admin/reset-all?token=' + encodeURIComponent(adminToken), { method:'DELETE' });
+      alert('All reset'); loadUsers();
     }
 
-    async function viewHistory(userId) {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      const res = await fetch("/admin/history/" + userId + "?token=" + adminToken);
-      if (!res.ok) {
-        document.getElementById("history").innerText = "⚠️ Error loading history.";
-        return;
-      }
-      const messages = await res.json();
-      let formatted = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
-      document.getElementById("history").innerText = formatted || "No history available.";
+    async function viewHistory(u) {
+      try {
+        const r = await fetch('/admin/history/' + u + '?token=' + encodeURIComponent(adminToken));
+        const j = await r.json();
+        document.getElementById('historyArea').innerText = j.map(m => `${m.role}: ${m.content}`).join("\n\n");
+      } catch (e) { document.getElementById('historyArea').innerText = 'Error loading history'; }
     }
 
-    async function viewLogs(userId) {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      const res = await fetch("/admin/logs/" + userId + "?token=" + adminToken);
-      if (!res.ok) {
-        document.getElementById("history").innerText = "⚠️ Error loading logs.";
-        return;
-      }
-      const text = await res.text();
-      document.getElementById("history").innerText = text || "No logs found.";
+    async function viewLogs(u) {
+      try {
+        const r = await fetch('/admin/logs/' + u + '?token=' + encodeURIComponent(adminToken));
+        const txt = await r.text();
+        document.getElementById('historyArea').innerText = txt;
+      } catch (e) { document.getElementById('historyArea').innerText = 'Error loading logs'; }
     }
 
-    async function downloadLogs(userId) {
-      if (!adminToken) return alert("⛔ Enter token first!");
-      window.open(`/admin/logs/${userId}/download?token=${adminToken}`, "_blank");
+    function downloadLogs(u) {
+      const url = '/admin/logs/' + u + '/download?token=' + encodeURIComponent(adminToken);
+      window.open(url, '_blank');
     }
+
+    // Check status quickly
+    (async ()=> {
+      try {
+        const r = await fetch('/status', { headers: { 'x-admin-token': '' } });
+        // this will likely return 403 if no token; ignore
+      } catch {}
+      document.getElementById('status').innerText = 'Ready';
+      appendMsg('bot','Hi — I am Luna. Speak, type, or upload a file.');
+    })();
   </script>
 </body>
 </html>
