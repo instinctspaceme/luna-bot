@@ -1,0 +1,12 @@
+{
+  "personality": "friendly",
+  "rotation": {
+    "enabled": false,
+    "strategy": "sequential",
+    "time": "09:00",
+    "lastRotated": ""
+  },
+  "rotationState": {
+    "index": 0
+  }
+}
