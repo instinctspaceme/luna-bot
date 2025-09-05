@@ -1,17 +1,15 @@
 import express from "express";
 import bodyParser from "body-parser";
-import dotenv from "dotenv";
 import { Telegraf } from "telegraf";
-import { v4 as uuidv4 } from "uuid";
+import multer from "multer";
 import fs from "fs";
 import path from "path";
-import fetch from "node-fetch";
-import multer from "multer";
+import { fileURLToPath } from "url";
 import OpenAI from "openai";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.PORT || 3000;
+const upload = multer({ dest: "uploads/" });
 
 app.use(bodyParser.json());
 app.use(express.static("public"));
@@ -19,218 +17,98 @@ app.use(express.static("public"));
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-const conversations = {};
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "secret123";
+// -------- Memory Storage --------
+let sessions = {};
+let logs = [];
 
-// Model can be switched in .env
-const MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo";
-
-// -------------
-// SAFE WRAPPER
-// -------------
-async function safeChatCompletion(messages) {
-  try {
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      messages,
-    });
-    return completion.choices[0].message.content;
-  } catch (err) {
-    if (err.status === 429) {
-      console.error("Rate limit hit:", err.message);
-      return "⚠️ I’m overloaded right now. Please try again later.";
-    }
-    console.error("OpenAI error:", err);
-    return "⚠️ Something went wrong with my brain. Try again later.";
-  }
-}
-
-// -------------------
-// --- WEB ROUTES ---
-// -------------------
-
+// -------- Web Chat Endpoint --------
 app.post("/chat", async (req, res) => {
-  const { userId, message } = req.body;
-  if (!conversations[userId]) conversations[userId] = [];
+  const { user, message } = req.body;
+  if (!sessions[user]) sessions[user] = [];
 
-  conversations[userId].push({ role: "user", content: message });
-
-  const reply = await safeChatCompletion([
-    { role: "system", content: "You are Luna, a friendly AI assistant." },
-    ...conversations[userId],
-  ]);
-
-  conversations[userId].push({ role: "assistant", content: reply });
+  sessions[user].push({ role: "user", content: message });
 
   try {
-    const filename = `voice_${uuidv4()}.mp3`;
-    const filepath = path.join("public", filename);
-    const mp3 = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: reply,
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: sessions[user],
     });
 
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    fs.writeFileSync(filepath, buffer);
+    const reply = response.choices[0].message.content;
+    sessions[user].push({ role: "assistant", content: reply });
 
-    res.json({ reply, voiceUrl: "/" + filename });
-  } catch (err) {
-    console.error("TTS error:", err);
+    logs.push({ user, message, reply, time: new Date() });
+
     res.json({ reply });
-  }
-});
-
-// Handle voice input upload
-const upload = multer({ dest: "uploads/" });
-app.post("/voice", upload.single("audio"), async (req, res) => {
-  const userId = req.body.userId || uuidv4();
-  if (!conversations[userId]) conversations[userId] = [];
-
-  try {
-    const transcript = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
-      model: "whisper-1",
-    });
-
-    const textInput = transcript.text;
-    conversations[userId].push({ role: "user", content: textInput });
-
-    const reply = await safeChatCompletion([
-      { role: "system", content: "You are Luna, a friendly AI assistant." },
-      ...conversations[userId],
-    ]);
-    conversations[userId].push({ role: "assistant", content: reply });
-
-    const filename = `voice_${uuidv4()}.mp3`;
-    const filepath = path.join("public", filename);
-    const mp3 = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: reply,
-    });
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    fs.writeFileSync(filepath, buffer);
-
-    fs.unlinkSync(req.file.path); // cleanup uploaded file
-
-    res.json({ transcript: textInput, reply, voiceUrl: "/" + filename });
   } catch (err) {
-    console.error("Web voice error:", err);
-    res.status(500).json({ error: "Voice processing failed." });
+    console.error("OpenAI Error:", err);
+    res.status(500).send("OpenAI API error.");
   }
 });
 
-// -----------------------
-// --- TELEGRAM ROUTES ---
-// -----------------------
+// -------- Telegram Bot --------
+bot.start(async (ctx) => {
+  try {
+    await ctx.replyWithPhoto(
+      { source: "public/luna_avatar.png" },
+      { caption: "🌙 Hi, I’m Luna — your AI assistant!" }
+    );
+  } catch (err) {
+    console.error("Telegram Error:", err);
+  }
+});
 
 bot.on("text", async (ctx) => {
-  const userId = ctx.from.id.toString();
-  const message = ctx.message.text;
-  if (!conversations[userId]) conversations[userId] = [];
+  const userId = ctx.from.id;
+  if (!sessions[userId]) sessions[userId] = [];
 
-  conversations[userId].push({ role: "user", content: message });
-
-  const reply = await safeChatCompletion([
-    { role: "system", content: "You are Luna, a friendly AI assistant." },
-    ...conversations[userId],
-  ]);
-  conversations[userId].push({ role: "assistant", content: reply });
+  sessions[userId].push({ role: "user", content: ctx.message.text });
 
   try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: sessions[userId],
+    });
+
+    const reply = response.choices[0].message.content;
+    sessions[userId].push({ role: "assistant", content: reply });
+
+    logs.push({ user: userId, message: ctx.message.text, reply, time: new Date() });
+
     await ctx.reply(reply);
-
-    const mp3 = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: reply,
-    });
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    const voiceFile = `voice_${uuidv4()}.ogg`;
-    fs.writeFileSync(voiceFile, buffer);
-    await ctx.replyWithVoice({ source: voiceFile });
-    fs.unlinkSync(voiceFile);
   } catch (err) {
-    console.error("Telegram TTS error:", err);
+    console.error("Telegram Reply Error:", err);
+    await ctx.reply("⚠️ Sorry, I had trouble replying.");
   }
 });
 
-// Voice messages
-bot.on("voice", async (ctx) => {
-  const userId = ctx.from.id.toString();
-  if (!conversations[userId]) conversations[userId] = [];
-
-  try {
-    const fileId = ctx.message.voice.file_id;
-    const file = await ctx.telegram.getFile(fileId);
-    const url = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-
-    const response = await fetch(url);
-    const oggBuffer = Buffer.from(await response.arrayBuffer());
-    const oggPath = `voice_input_${uuidv4()}.ogg`;
-    fs.writeFileSync(oggPath, oggBuffer);
-
-    const transcript = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(oggPath),
-      model: "whisper-1",
-    });
-
-    const textInput = transcript.text;
-    conversations[userId].push({ role: "user", content: textInput });
-
-    const reply = await safeChatCompletion([
-      { role: "system", content: "You are Luna, a friendly AI assistant." },
-      ...conversations[userId],
-    ]);
-    conversations[userId].push({ role: "assistant", content: reply });
-
-    await ctx.reply(`🗣 You said: "${textInput}"\n\n💡 Luna: ${reply}`);
-
-    const mp3 = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: reply,
-    });
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    const voiceFile = `voice_${uuidv4()}.ogg`;
-    fs.writeFileSync(voiceFile, buffer);
-    await ctx.replyWithVoice({ source: voiceFile });
-    fs.unlinkSync(voiceFile);
-    fs.unlinkSync(oggPath);
-  } catch (err) {
-    console.error("Telegram voice error:", err);
-    ctx.reply("⚠️ Failed to process your voice message.");
-  }
-});
-
-// -----------------------
-// --- ADMIN DASHBOARD ---
-// -----------------------
-app.get("/admin/users", (req, res) => {
-  if (req.headers["x-admin-pass"] !== ADMIN_PASSWORD)
-    return res.status(403).json({ error: "Forbidden" });
-  res.json({ users: Object.keys(conversations) });
-});
-
-app.get("/admin/history/:id", (req, res) => {
-  if (req.headers["x-admin-pass"] !== ADMIN_PASSWORD)
-    return res.status(403).json({ error: "Forbidden" });
-  res.json({ history: conversations[req.params.id] || [] });
-});
-
-app.post("/admin/reset", (req, res) => {
-  if (req.headers["x-admin-pass"] !== ADMIN_PASSWORD)
-    return res.status(403).json({ error: "Forbidden" });
-  Object.keys(conversations).forEach((u) => delete conversations[u]);
-  res.json({ success: true });
-});
-
-// -----------------------
-// --- START SERVICES ---
-// -----------------------
-app.listen(PORT, () =>
-  console.log(`🌐 Web server running on http://localhost:${PORT}`)
-);
 bot.launch();
-console.log("🤖 Telegram bot is running!");
+
+// -------- Admin Routes --------
+app.get("/sessions", (req, res) => res.json(sessions));
+app.get("/logs", (req, res) => res.json(logs));
+
+app.post("/reset/:user", (req, res) => {
+  const user = req.params.user;
+  delete sessions[user];
+  res.send(`✅ Session reset for ${user}`);
+});
+
+// -------- Avatar Upload --------
+app.post("/upload-avatar", upload.single("avatar"), (req, res) => {
+  if (!req.file) return res.status(400).send("No file uploaded.");
+
+  const newPath = path.join(__dirname, "public", "luna_avatar.png");
+
+  fs.rename(req.file.path, newPath, (err) => {
+    if (err) {
+      console.error("Error saving avatar:", err);
+      return res.status(500).send("Failed to update avatar.");
+    }
+    res.send("✅ Avatar updated successfully!");
+  });
+});
+
+// -------- Start Server --------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
