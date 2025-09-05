@@ -13,11 +13,12 @@
 </head>
 <body>
   <h1>🌙 Luna AI</h1>
-  <img id="avatar" src="luna_avatar.png?ts=1" width="100" />
+  <img id="avatar" src="luna_avatar.png?ts=1" width="120" />
 
   <div id="chat"></div>
   <input id="message" placeholder="Type here..." />
   <button onclick="sendMessage()">Send</button>
+  <button onclick="startVoice()">🎤 Speak</button>
 
   <script>
     async function sendMessage() {
@@ -34,8 +35,25 @@
 
       const data = await res.json();
       chat.innerHTML += `<div class="msg assistant"><b>Luna:</b> ${data.reply}</div>`;
+
+      if (data.audio) {
+        const audio = new Audio(data.audio);
+        audio.play();
+      }
+
       document.getElementById("message").value = "";
       chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Voice input using Web Speech API
+    function startVoice() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = "en-US";
+      recognition.onresult = (event) => {
+        document.getElementById("message").value = event.results[0][0].transcript;
+        sendMessage();
+      };
+      recognition.start();
     }
   </script>
 </body>
