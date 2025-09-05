@@ -1,202 +1,237 @@
 import express from "express";
 import bodyParser from "body-parser";
+import dotenv from "dotenv";
+import { Telegraf } from "telegraf";
+import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import { Telegraf } from "telegraf";
+import fetch from "node-fetch";
+import multer from "multer";
 import OpenAI from "openai";
-import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files
-app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
+app.use(express.static("public"));
 
-// OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-// Memory file
-const memoryFile = path.join(__dirname, "memory.json");
-let memory = {};
-if (fs.existsSync(memoryFile)) {
-  memory = JSON.parse(fs.readFileSync(memoryFile, "utf-8"));
-}
+const conversations = {};
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "secret123";
 
-// Voice storage
-const voicesDir = path.join(__dirname, "public", "voices");
-if (!fs.existsSync(voicesDir)) fs.mkdirSync(voicesDir, { recursive: true });
+// -------------------
+// --- WEB ROUTES ---
+// -------------------
 
-// --- Cleanup Config ---
-const VOICE_TTL_SECONDS = process.env.VOICE_TTL_SECONDS
-  ? Number(process.env.VOICE_TTL_SECONDS)
-  : 60 * 60 * 24; // 24h default
-const VOICE_MAX_FILES = process.env.VOICE_MAX_FILES
-  ? Number(process.env.VOICE_MAX_FILES)
-  : 200; // keep max 200 files
-const CLEANUP_INTERVAL_MS = process.env.VOICE_CLEANUP_INTERVAL_MS
-  ? Number(process.env.VOICE_CLEANUP_INTERVAL_MS)
-  : 1000 * 60 * 60; // 1h default
-
-// --- Helpers ---
-function saveMemory() {
-  fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
-}
-
-function safeUnlink(p) {
-  try {
-    fs.unlinkSync(p);
-  } catch (_) {}
-}
-
-function cleanupVoiceFiles() {
-  try {
-    const files = fs
-      .readdirSync(voicesDir)
-      .map((f) => {
-        const full = path.join(voicesDir, f);
-        const stat = fs.statSync(full);
-        return { file: f, full, mtime: stat.mtimeMs };
-      })
-      .sort((a, b) => a.mtime - b.mtime);
-
-    const now = Date.now();
-
-    // Remove by TTL
-    for (const item of files) {
-      const ageSec = (now - item.mtime) / 1000;
-      if (ageSec > VOICE_TTL_SECONDS) {
-        safeUnlink(item.full);
-        console.log(`🧹 Removed old voice file: ${item.file}`);
-      }
-    }
-
-    // Refresh list
-    const remaining = fs
-      .readdirSync(voicesDir)
-      .map((f) => {
-        const full = path.join(voicesDir, f);
-        const stat = fs.statSync(full);
-        return { file: f, full, mtime: stat.mtimeMs };
-      })
-      .sort((a, b) => a.mtime - b.mtime);
-
-    // Enforce max count
-    if (VOICE_MAX_FILES && remaining.length > VOICE_MAX_FILES) {
-      const excess = remaining.length - VOICE_MAX_FILES;
-      for (let i = 0; i < excess; i++) {
-        safeUnlink(remaining[i].full);
-        console.log(`🧹 Removed to enforce max: ${remaining[i].file}`);
-      }
-    }
-  } catch (e) {
-    console.error("Voice cleanup error:", e?.message || e);
-  }
-}
-
-// --- OpenAI Chat + TTS ---
-async function getLunaReply(userId, userMessage) {
-  if (!memory[userId]) memory[userId] = [];
-  memory[userId].push({ role: "user", content: userMessage });
-
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: "You are Luna, a helpful AI assistant." },
-      ...memory[userId],
-    ],
-    max_tokens: 200,
-  });
-
-  const reply = response.choices[0].message.content;
-  memory[userId].push({ role: "assistant", content: reply });
-  saveMemory();
-  return reply;
-}
-
-async function textToSpeech(text, filename) {
-  const outputPath = path.join(voicesDir, filename);
-  const mp3 = await openai.audio.speech.create({
-    model: "gpt-4o-mini-tts",
-    voice: "alloy",
-    input: text,
-  });
-  const buffer = Buffer.from(await mp3.arrayBuffer());
-  fs.writeFileSync(outputPath, buffer);
-  return `/voices/${filename}`;
-}
-
-// --- Web Routes ---
+// Handle text chat
 app.post("/chat", async (req, res) => {
   const { userId, message } = req.body;
+  if (!conversations[userId]) conversations[userId] = [];
+
+  conversations[userId].push({ role: "user", content: message });
+
   try {
-    const reply = await getLunaReply(userId, message);
-    const voiceFile = `${uuidv4()}.mp3`;
-    const voiceUrl = await textToSpeech(reply, voiceFile);
-    res.json({ reply, voiceUrl });
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are Luna, a friendly AI assistant." },
+        ...conversations[userId],
+      ],
+    });
+
+    const reply = completion.choices[0].message.content;
+    conversations[userId].push({ role: "assistant", content: reply });
+
+    // Generate voice file
+    const filename = `voice_${uuidv4()}.mp3`;
+    const filepath = path.join("public", filename);
+    const mp3 = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: reply,
+    });
+
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    fs.writeFileSync(filepath, buffer);
+
+    res.json({ reply, voiceUrl: "/" + filename });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Web error:", err);
+    res.status(500).json({ error: "Something went wrong." });
   }
 });
 
-// Admin routes
-app.post("/admin/reset", (req, res) => {
-  memory = {};
-  saveMemory();
-  res.json({ status: "All user memory cleared" });
+// Handle voice input upload
+const upload = multer({ dest: "uploads/" });
+app.post("/voice", upload.single("audio"), async (req, res) => {
+  const userId = req.body.userId || uuidv4();
+  if (!conversations[userId]) conversations[userId] = [];
+
+  try {
+    const transcript = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(req.file.path),
+      model: "whisper-1",
+    });
+
+    const textInput = transcript.text;
+    conversations[userId].push({ role: "user", content: textInput });
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are Luna, a friendly AI assistant." },
+        ...conversations[userId],
+      ],
+    });
+
+    const reply = completion.choices[0].message.content;
+    conversations[userId].push({ role: "assistant", content: reply });
+
+    const filename = `voice_${uuidv4()}.mp3`;
+    const filepath = path.join("public", filename);
+    const mp3 = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: reply,
+    });
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    fs.writeFileSync(filepath, buffer);
+
+    fs.unlinkSync(req.file.path); // cleanup uploaded file
+
+    res.json({ transcript: textInput, reply, voiceUrl: "/" + filename });
+  } catch (err) {
+    console.error("Web voice error:", err);
+    res.status(500).json({ error: "Voice processing failed." });
+  }
 });
 
-app.get("/admin/users", (req, res) => {
-  res.json({ users: Object.keys(memory) });
-});
+// -----------------------
+// --- TELEGRAM ROUTES ---
+// -----------------------
 
-app.get("/admin/history/:userId", (req, res) => {
-  const { userId } = req.params;
-  res.json({ history: memory[userId] || [] });
-});
+// Text messages
+bot.on("text", async (ctx) => {
+  const userId = ctx.from.id.toString();
+  const message = ctx.message.text;
+  if (!conversations[userId]) conversations[userId] = [];
 
-// --- Telegram Bot ---
-if (process.env.TELEGRAM_BOT_TOKEN) {
-  const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+  conversations[userId].push({ role: "user", content: message });
 
-  bot.start((ctx) => ctx.reply("Hi! I’m Luna. Talk to me!"));
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are Luna, a friendly AI assistant." },
+        ...conversations[userId],
+      ],
+    });
 
-  bot.on("text", async (ctx) => {
-    const userId = ctx.from.id.toString();
-    const message = ctx.message.text;
+    const reply = completion.choices[0].message.content;
+    conversations[userId].push({ role: "assistant", content: reply });
 
-    const reply = await getLunaReply(userId, message);
     await ctx.reply(reply);
 
-    // Send voice reply too
-    const voiceFile = `${uuidv4()}.ogg`;
-    const voiceUrl = await textToSpeech(reply, voiceFile);
-    const fullAudioPath = path.join(__dirname, "public", voiceUrl);
+    // Voice reply
+    const mp3 = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: reply,
+    });
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    const voiceFile = `voice_${uuidv4()}.ogg`;
+    fs.writeFileSync(voiceFile, buffer);
+    await ctx.replyWithVoice({ source: voiceFile });
+    fs.unlinkSync(voiceFile);
+  } catch (err) {
+    console.error("Telegram text error:", err);
+    ctx.reply("⚠️ Oops, something went wrong.");
+  }
+});
 
-    if (fs.existsSync(fullAudioPath)) {
-      await ctx.replyWithVoice({ source: fullAudioPath });
-      safeUnlink(fullAudioPath); // optional immediate cleanup
-    }
-  });
+// Voice messages
+bot.on("voice", async (ctx) => {
+  const userId = ctx.from.id.toString();
+  if (!conversations[userId]) conversations[userId] = [];
 
-  bot.launch();
-  console.log("✅ Telegram bot running");
-}
+  try {
+    const fileId = ctx.message.voice.file_id;
+    const file = await ctx.telegram.getFile(fileId);
+    const url = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 
-// --- Startup ---
+    const response = await fetch(url);
+    const oggBuffer = Buffer.from(await response.arrayBuffer());
+    const oggPath = `voice_input_${uuidv4()}.ogg`;
+    fs.writeFileSync(oggPath, oggBuffer);
+
+    const transcript = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(oggPath),
+      model: "whisper-1",
+    });
+
+    const textInput = transcript.text;
+    conversations[userId].push({ role: "user", content: textInput });
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are Luna, a friendly AI assistant." },
+        ...conversations[userId],
+      ],
+    });
+
+    const reply = completion.choices[0].message.content;
+    conversations[userId].push({ role: "assistant", content: reply });
+
+    await ctx.reply(`🗣 You said: "${textInput}"\n\n💡 Luna: ${reply}`);
+
+    const mp3 = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: reply,
+    });
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    const voiceFile = `voice_${uuidv4()}.ogg`;
+    fs.writeFileSync(voiceFile, buffer);
+    await ctx.replyWithVoice({ source: voiceFile });
+    fs.unlinkSync(voiceFile);
+    fs.unlinkSync(oggPath);
+  } catch (err) {
+    console.error("Telegram voice error:", err);
+    ctx.reply("⚠️ Failed to process your voice message.");
+  }
+});
+
+// -----------------------
+// --- ADMIN DASHBOARD ---
+// -----------------------
+app.get("/admin/users", (req, res) => {
+  if (req.headers["x-admin-pass"] !== ADMIN_PASSWORD)
+    return res.status(403).json({ error: "Forbidden" });
+  res.json({ users: Object.keys(conversations) });
+});
+
+app.get("/admin/history/:id", (req, res) => {
+  if (req.headers["x-admin-pass"] !== ADMIN_PASSWORD)
+    return res.status(403).json({ error: "Forbidden" });
+  res.json({ history: conversations[req.params.id] || [] });
+});
+
+app.post("/admin/reset", (req, res) => {
+  if (req.headers["x-admin-pass"] !== ADMIN_PASSWORD)
+    return res.status(403).json({ error: "Forbidden" });
+  Object.keys(conversations).forEach((u) => delete conversations[u]);
+  res.json({ success: true });
+});
+
+// -----------------------
+// --- START SERVICES ---
+// -----------------------
 app.listen(PORT, () =>
-  console.log(`🚀 Luna running on http://localhost:${PORT}`)
+  console.log(`🌐 Web server running on http://localhost:${PORT}`)
 );
-
-// Run cleanup
-cleanupVoiceFiles();
-setInterval(cleanupVoiceFiles, CLEANUP_INTERVAL_MS);
+bot.launch();
+console.log("🤖 Telegram bot is running!");
