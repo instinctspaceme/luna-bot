@@ -1,91 +1,42 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Luna Web Chat</title>
+  <title>Luna AI</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f9; }
-    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; background: #fff; }
-    .msg { margin: 5px 0; }
+    body { font-family: Arial; text-align: center; margin: 20px; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
+    .msg { margin: 5px; }
     .user { color: blue; }
-    .luna { color: green; }
-    #controls { margin-top: 10px; }
-    button { margin: 5px; padding: 8px 12px; }
+    .assistant { color: purple; }
   </style>
 </head>
 <body>
-  <h2>💬 Chat with Luna</h2>
-  <div id="chat"></div>
+  <h1>🌙 Luna AI</h1>
+  <img id="avatar" src="luna_avatar.png?ts=1" width="100" />
 
-  <div id="controls">
-    <input type="text" id="message" placeholder="Type your message..." />
-    <button onclick="sendMessage()">Send</button>
-    <button id="micBtn">🎤 Speak</button>
-  </div>
+  <div id="chat"></div>
+  <input id="message" placeholder="Type here..." />
+  <button onclick="sendMessage()">Send</button>
 
   <script>
-    const chatBox = document.getElementById("chat");
-    const userId = localStorage.getItem("lunaUserId") || Date.now().toString();
-    localStorage.setItem("lunaUserId", userId);
-
-    function addMessage(role, text) {
-      const div = document.createElement("div");
-      div.classList.add("msg", role);
-      div.innerHTML = `<b>${role}:</b> ${text}`;
-      chatBox.appendChild(div);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
     async function sendMessage() {
-      const input = document.getElementById("message");
-      const msg = input.value.trim();
-      if (!msg) return;
-      addMessage("user", msg);
-      input.value = "";
+      const msg = document.getElementById("message").value;
+      const chat = document.getElementById("chat");
+
+      chat.innerHTML += `<div class="msg user"><b>You:</b> ${msg}</div>`;
 
       const res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, message: msg })
+        body: JSON.stringify({ user: "web", message: msg }),
       });
+
       const data = await res.json();
-      addMessage("luna", data.reply);
-      if (data.voiceUrl) new Audio(data.voiceUrl).play();
+      chat.innerHTML += `<div class="msg assistant"><b>Luna:</b> ${data.reply}</div>`;
+      document.getElementById("message").value = "";
+      chat.scrollTop = chat.scrollHeight;
     }
-
-    // Record voice and send to server
-    const micBtn = document.getElementById("micBtn");
-    let mediaRecorder, audioChunks = [];
-
-    micBtn.addEventListener("click", async () => {
-      if (!navigator.mediaDevices) {
-        alert("🎤 Microphone not supported.");
-        return;
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("audio", blob, "input.webm");
-        formData.append("userId", userId);
-
-        const res = await fetch("/voice", { method: "POST", body: formData });
-        const data = await res.json();
-        addMessage("user", data.transcript);
-        addMessage("luna", data.reply);
-        if (data.voiceUrl) new Audio(data.voiceUrl).play();
-      };
-
-      mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 5000); // record 5 sec max
-    });
   </script>
 </body>
 </html>
