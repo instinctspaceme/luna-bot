@@ -1,3 +1,4 @@
+:root { color-scheme: dark; }
 body { font-family: Inter, system-ui, Arial, sans-serif; background: #0f1115; color: #eaecee; margin: 0; padding: 24px; }
 h1 { margin-top: 0; }
 #top { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
@@ -6,10 +7,12 @@ h1 { margin-top: 0; }
 .user { color: #5fd7a1; }
 .luna { color: #c9b6ff; display: flex; align-items: flex-start; gap: 8px; }
 .sys { color: #ffcd75; }
-#controls { display: flex; gap: 8px; }
+#controls { display: flex; gap: 8px; margin-bottom: 12px; }
 #msg { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid #2a2f3a; background: #0c0f16; color: #eaecee; }
 button { background: #6b7cff; border: none; color: white; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
-button:hover { opacity: 0.9; }
+button:hover { opacity: 0.92; }
 .card { border: 1px solid #2a2f3a; background: #131722; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
 .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #2a2f3a; }
 #preview.avatar { width: 64px; height: 64px; }
+.partials { margin-top: 8px; font-style: italic; color: #9fb4ff; min-height: 20px; }
+input[type="file"], input[type="password"] { background: #0c0f16; color: #eaecee; border: 1px solid #2a2f3a; border-radius: 8px; padding: 8px; }
