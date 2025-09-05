@@ -6,14 +6,18 @@
   <style>
     body { font-family: Arial; text-align: center; margin: 20px; }
     #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
-    .msg { margin: 5px; }
-    .user { color: blue; }
-    .assistant { color: purple; }
+    .msg { margin: 5px; text-align: left; }
+    .user { color: #0b63ff; }
+    .assistant { color: #7a2cff; }
+    #meta { margin-bottom: 12px; opacity: 0.8; }
   </style>
 </head>
 <body>
   <h1>🌙 Luna AI</h1>
-  <img id="avatar" src="luna_avatar.png?ts=1" width="120" />
+  <div id="meta">
+    <img id="avatar" src="luna_avatar.png?ts=1" width="100" style="border-radius:12px;vertical-align:middle"/>
+    <span id="personality" style="margin-left:8px; font-size:14px;">loading…</span>
+  </div>
 
   <div id="chat"></div>
   <input id="message" placeholder="Type here..." />
@@ -21,40 +25,29 @@
   <button onclick="startVoice()">🎤 Speak</button>
 
   <script>
+    async function loadSettings() {
+      const s = await (await fetch("/settings")).json();
+      document.getElementById("personality").innerText = `Personality: ${s.personality}`;
+      document.getElementById("avatar").src = "luna_avatar.png?ts=" + Date.now();
+    }
+    loadSettings();
+
     async function sendMessage() {
       const msg = document.getElementById("message").value;
+      if (!msg) return;
       const chat = document.getElementById("chat");
-
       chat.innerHTML += `<div class="msg user"><b>You:</b> ${msg}</div>`;
 
       const res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: "web", message: msg }),
+        body: JSON.stringify({ user: "web", message: msg })
       });
 
       const data = await res.json();
       chat.innerHTML += `<div class="msg assistant"><b>Luna:</b> ${data.reply}</div>`;
 
-      if (data.audio) {
-        const audio = new Audio(data.audio);
-        audio.play();
-      }
+      if (data.audio) new Audio(data.audio).play();
 
       document.getElementById("message").value = "";
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    // Voice input using Web Speech API
-    function startVoice() {
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      recognition.lang = "en-US";
-      recognition.onresult = (event) => {
-        document.getElementById("message").value = event.results[0][0].transcript;
-        sendMessage();
-      };
-      recognition.start();
-    }
-  </script>
-</body>
-</html>
+      chat.scrollTop = chat.scroll
