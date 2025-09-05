@@ -3,36 +3,130 @@
 <head>
   <meta charset="UTF-8" />
   <title>Luna Admin</title>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    .row { display:flex; gap:20px; flex-wrap: wrap; }
+    .card { border:1px solid #ddd; padding:12px; border-radius:10px; margin:8px; }
+    img { border-radius: 10px; }
+    label { display:block; margin-top:8px; }
+  </style>
 </head>
 <body>
-  <h2>🌙 Luna Admin Panel - Avatar Gallery</h2>
-  <img id="currentAvatar" src="luna_avatar.png?ts=1" width="120" />
-  <div id="gallery"></div>
+  <h1>🛠️ Luna Admin Panel</h1>
+
+  <div class="row">
+    <div class="card" style="min-width:280px">
+      <h2>Current Avatar</h2>
+      <img id="currentAvatar" src="luna_avatar.png?ts=1" width="140" />
+      <p id="curPersonality">Loading…</p>
+    </div>
+
+    <div class="card" style="min-width:280px">
+      <h2>Settings</h2>
+      <label>
+        Personality:
+        <select id="personality">
+          <option value="friendly">friendly</option>
+          <option value="formal">formal</option>
+          <option value="playful">playful</option>
+          <option value="tutor">tutor</option>
+          <option value="gamer">gamer</option>
+        </select>
+      </label>
+
+      <h3>Avatar Rotation</h3>
+      <label>
+        <input type="checkbox" id="rotEnabled" />
+        Enabled
+      </label>
+      <label>
+        Strategy:
+        <select id="rotStrategy">
+          <option value="sequential">sequential</option>
+          <option value="random">random</option>
+        </select>
+      </label>
+      <label>
+        Time (HH:MM, server time): 
+        <input id="rotTime" type="time" value="09:00"/>
+      </label>
+
+      <button onclick="saveSettings()">💾 Save Settings</button>
+      <button onclick="rotateNow()">🔄 Rotate Now</button>
+      <div id="saveMsg"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Avatar Gallery</h2>
+    <div id="gallery" class="row"></div>
+  </div>
 
   <script>
-    async function loadAvatars() {
-      const res = await fetch("/avatars");
-      const avatars = await res.json();
+    async function loadAll() {
+      const s = await (await fetch("/settings")).json();
+      document.getElementById("curPersonality").innerText = "Personality: " + s.personality;
+      document.getElementById("personality").value = s.personality || "friendly";
+      document.getElementById("rotEnabled").checked = s.rotation?.enabled || false;
+      document.getElementById("rotStrategy").value = s.rotation?.strategy || "sequential";
+      document.getElementById("rotTime").value = s.rotation?.time || "09:00";
+      document.getElementById("currentAvatar").src = "luna_avatar.png?ts=" + Date.now();
+
+      const avatars = await (await fetch("/avatars")).json();
       const gallery = document.getElementById("gallery");
       gallery.innerHTML = "";
-
       avatars.forEach(av => {
-        const div = document.createElement("div");
-        div.innerHTML = `
-          <img src="avatars/${av}" width="80" style="margin:5px;" />
-          <button onclick="setAvatar('${av}')">Set</button>
+        const wrap = document.createElement("div");
+        wrap.innerHTML = `
+          <div style="text-align:center">
+            <img src="avatars/${av}" width="100" />
+            <div style="margin-top:6px">
+              <button onclick="setAvatar('${av}')">Set</button>
+            </div>
+            <div style="font-size:12px;opacity:.7;margin-top:4px">${av}</div>
+          </div>
         `;
-        gallery.appendChild(div);
+        gallery.appendChild(wrap);
       });
+    }
+
+    async function saveSettings() {
+      const body = {
+        personality: document.getElementById("personality").value,
+        rotation: {
+          enabled: document.getElementById("rotEnabled").checked,
+          strategy: document.getElementById("rotStrategy").value,
+          time: document.getElementById("rotTime").value
+        }
+      };
+      const res = await fetch("/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      document.getElementById("saveMsg").innerText = data.ok ? "✅ Saved!" : "❌ Failed to save";
+      document.getElementById("curPersonality").innerText = "Personality: " + body.personality;
+    }
+
+    async function rotateNow() {
+      const res = await fetch("/rotate-now", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        alert("✅ Rotated to: " + data.pick);
+        document.getElementById("currentAvatar").src = "luna_avatar.png?ts=" + Date.now();
+      } else {
+        alert("❌ " + (data.reason || data.error || "Rotation failed"));
+      }
     }
 
     async function setAvatar(name) {
       await fetch(`/set-avatar/${name}`, { method: "POST" });
       document.getElementById("currentAvatar").src = "luna_avatar.png?ts=" + Date.now();
-      alert("✅ Avatar updated!");
+      alert("✅ Avatar set to " + name);
     }
 
-    loadAvatars();
+    loadAll();
   </script>
 </body>
 </html>
