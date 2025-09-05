@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,7 +30,6 @@
     const userId = localStorage.getItem("lunaUserId") || Date.now().toString();
     localStorage.setItem("lunaUserId", userId);
 
-    // Display messages
     function addMessage(role, text) {
       const div = document.createElement("div");
       div.classList.add("msg", role);
@@ -38,7 +38,6 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Send message
     async function sendMessage() {
       const input = document.getElementById("message");
       const msg = input.value.trim();
@@ -53,32 +52,39 @@
       });
       const data = await res.json();
       addMessage("luna", data.reply);
-
-      if (data.voiceUrl) {
-        const audio = new Audio(data.voiceUrl);
-        audio.play();
-      }
+      if (data.voiceUrl) new Audio(data.voiceUrl).play();
     }
 
-    // Speech-to-text (Web Speech API)
+    // Record voice and send to server
     const micBtn = document.getElementById("micBtn");
-    let recognition;
-    if ("webkitSpeechRecognition" in window) {
-      recognition = new webkitSpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
+    let mediaRecorder, audioChunks = [];
 
-      recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
-        document.getElementById("message").value = transcript;
-        sendMessage();
+    micBtn.addEventListener("click", async () => {
+      if (!navigator.mediaDevices) {
+        alert("🎤 Microphone not supported.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        const formData = new FormData();
+        formData.append("audio", blob, "input.webm");
+        formData.append("userId", userId);
+
+        const res = await fetch("/voice", { method: "POST", body: formData });
+        const data = await res.json();
+        addMessage("user", data.transcript);
+        addMessage("luna", data.reply);
+        if (data.voiceUrl) new Audio(data.voiceUrl).play();
       };
-    }
 
-    micBtn.addEventListener("click", () => {
-      if (recognition) recognition.start();
-      else alert("Speech recognition not supported in this browser.");
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 5000); // record 5 sec max
     });
   </script>
 </body>
