@@ -9,6 +9,13 @@
   <h1>🛠️ Luna Admin</h1>
 
   <section class="card">
+    <h3>Authenticate</h3>
+    <input id="pin" placeholder="Enter admin PIN" type="password" />
+    <button id="lockBtn">Unlock</button>
+    <span id="authStatus"></span>
+  </section>
+
+  <section class="card">
     <h3>Current</h3>
     <div>
       <img id="preview" class="avatar" src="" />
@@ -28,7 +35,7 @@
       </select>
     </label>
 
-    <label>Rotation mode:
+    <label>Rotation:
       <select id="rotation">
         <option value="none">none</option>
         <option value="daily-random">daily-random</option>
@@ -36,45 +43,98 @@
       </select>
     </label>
 
-    <label>Fixed avatar (used when rotation = none):
+    <label>Fixed avatar:
       <select id="avatar"></select>
     </label>
 
-    <button id="saveBtn">💾 Save</button>
+    <label>Voice:
+      <select id="voice">
+        <option value="alloy">alloy</option>
+        <option value="verse">verse</option>
+        <option value="serene">serene</option>
+      </select>
+    </label>
+
+    <button id="saveBtn" disabled>💾 Save</button>
     <span id="status"></span>
   </section>
 
+  <section class="card">
+    <h3>Upload New Avatar</h3>
+    <input id="file" type="file" accept="image/*" />
+    <button id="uploadBtn" disabled>Upload</button>
+    <div id="uploadStatus"></div>
+  </section>
+
   <script>
+    let authed = false;
+    let pinVal = "";
+
     async function load() {
       const s = await (await fetch("/api/settings")).json();
       document.getElementById("personality").value = s.personality;
       document.getElementById("rotation").value = s.rotation;
-      document.getElementById("preview").src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
-      document.getElementById("curText").innerText = `Active avatar: ${s.activeAvatar}`;
+      document.getElementById("voice").value = s.voice || "alloy";
 
       const list = await (await fetch("/api/avatars")).json();
       const sel = document.getElementById("avatar");
       sel.innerHTML = list.map(n => `<option value="${n}">${n}</option>`).join("");
       sel.value = s.avatar;
+
+      document.getElementById("preview").src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
+      document.getElementById("curText").innerText = `Active avatar: ${s.activeAvatar}`;
     }
 
     async function save() {
+      if (!authed) return;
       const body = {
         personality: document.getElementById("personality").value,
         rotation: document.getElementById("rotation").value,
-        avatar: document.getElementById("avatar").value
+        avatar: document.getElementById("avatar").value,
+        voice: document.getElementById("voice").value
       };
       const res = await fetch("/api/settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-pin": pinVal },
         body: JSON.stringify(body)
       });
       const data = await res.json();
-      document.getElementById("status").innerText = data.success ? "✅ Saved" : "❌ Failed";
+      document.getElementById("status").innerText = data.success ? "✅ Saved" : ("❌ " + (data.error || "Failed"));
       await load();
     }
 
+    async function uploadAvatar() {
+      if (!authed) return;
+      const f = document.getElementById("file").files[0];
+      if (!f) { document.getElementById("uploadStatus").innerText = "Select a file."; return; }
+      const fd = new FormData();
+      fd.append("avatar", f);
+      const res = await fetch("/api/upload-avatar", {
+        method: "POST",
+        headers: { "x-admin-pin": pinVal },
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById("uploadStatus").innerText = `✅ Uploaded: ${data.filename}`;
+        await load();
+      } else {
+        document.getElementById("uploadStatus").innerText = `❌ ${data.error || "Upload failed"}`;
+      }
+    }
+
     document.getElementById("saveBtn").onclick = save;
+    document.getElementById("uploadBtn").onclick = uploadAvatar;
+
+    document.getElementById("lockBtn").onclick = () => {
+      pinVal = document.getElementById("pin").value.trim();
+      if (!pinVal) { document.getElementById("authStatus").innerText = "Enter a PIN."; return; }
+      authed = true;
+      document.getElementById("authStatus").innerText = "🔓 Unlocked (PIN will be sent with actions)";
+      document.getElementById("saveBtn").disabled = false;
+      document.getElementById("uploadBtn").disabled = false;
+    };
+
     load();
   </script>
 </body>
