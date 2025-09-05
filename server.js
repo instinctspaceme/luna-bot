@@ -1,169 +1,125 @@
+// server.js
 import express from "express";
-import bodyParser from "body-parser";
-import { Telegraf } from "telegraf";
-import multer from "multer";
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import OpenAI from "openai";
+import fs from "fs";
+import { Telegraf } from "telegraf";
+import fetch from "node-fetch";
+import { Configuration, OpenAIApi } from "openai";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// ========== ENVIRONMENT VARS ==========
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL;
+
+if (!OPENAI_API_KEY || !TELEGRAM_BOT_TOKEN || !RENDER_EXTERNAL_URL) {
+  console.error("❌ Missing required environment variables!");
+  process.exit(1);
+}
+
+// ========== EXPRESS SETUP ==========
 const app = express();
-const upload = multer({ dest: "uploads/" });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-app.use(bodyParser.json());
-app.use(express.static("public"));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-/* -------------------- OpenAI & Telegram -------------------- */
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+// ========== CONFIG ==========
+const CONFIG_FILE = path.join(__dirname, "config.json");
 
-/* -------------------- In-Memory Chat Sessions -------------------- */
-let sessions = {}; // { userId: [ {role, content}, ... ] }
-let logs = [];
-
-/* -------------------- Settings (config.json) -------------------- */
-const CONFIG_PATH = path.join(__dirname, "config.json");
-function readConfig() {
-  try {
-    const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return {
-      personality: "friendly",
-      rotation: { enabled: false, strategy: "sequential", time: "09:00", lastRotated: "" },
-      rotationState: { index: 0 }
-    };
-  }
-}
-function writeConfig(cfg) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
-}
-let CONFIG = readConfig();
-
-/* -------------------- Personality System Prompt -------------------- */
-const PERSONALITIES = {
-  friendly:
-    "You are Luna, a warm, encouraging, and helpful AI companion. Be concise, kind, and practical.",
-  formal:
-    "You are Luna, a clear and professional assistant. Use polite, concise, and precise language.",
-  playful:
-    "You are Luna, witty and upbeat. Keep it light, positive, and fun while staying helpful.",
-  tutor:
-    "You are Luna, a patient teacher. Explain step by step, give examples, and check understanding.",
-  gamer:
-    "You are Luna, a gamer buddy. Use casual tone, analogies to games, and keep responses punchy."
+// Load config or create default
+let config = {
+  personality: "friendly",
+  avatar: "luna_avatar.png",
+  rotation: "none" // none | daily-random | daily-sequence
 };
-
-function systemMessage() {
-  const p = CONFIG.personality in PERSONALITIES ? CONFIG.personality : "friendly";
-  return { role: "system", content: PERSONALITIES[p] };
+if (fs.existsSync(CONFIG_FILE)) {
+  config = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+}
+function saveConfig() {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
-/* -------------------- Utility: Avatar helpers -------------------- */
-const PUBLIC_DIR = path.join(__dirname, "public");
-const AVATARS_DIR = path.join(PUBLIC_DIR, "avatars");
-const ACTIVE_AVATAR = path.join(PUBLIC_DIR, "luna_avatar.png");
+// ========== OPENAI ==========
+const openai = new OpenAIApi(new Configuration({ apiKey: OPENAI_API_KEY }));
 
-function listAvatars() {
-  if (!fs.existsSync(AVATARS_DIR)) return [];
-  return fs
-    .readdirSync(AVATARS_DIR)
-    .filter((f) => /\.(png|jpg|jpeg|webp)$/i.test(f))
-    .sort();
-}
-
-function setActiveAvatarByName(filename) {
-  const sourcePath = path.join(AVATARS_DIR, filename);
-  if (!fs.existsSync(sourcePath)) throw new Error("Avatar not found");
-  fs.copyFileSync(sourcePath, ACTIVE_AVATAR);
-}
-
-function rotateAvatarNow() {
-  const avatars = listAvatars();
-  if (avatars.length === 0) return { ok: false, reason: "No avatars found." };
-
-  if (CONFIG.rotation.strategy === "random") {
-    // choose different from current if possible
-    const currentHash = fs.existsSync(ACTIVE_AVATAR)
-      ? fs.readFileSync(ACTIVE_AVATAR).toString("base64").slice(0, 40)
-      : "";
-    let pick = avatars[Math.floor(Math.random() * avatars.length)];
-    // try a few times to avoid choosing same image
-    for (let i = 0; i < 5; i++) {
-      const tmp = avatars[Math.floor(Math.random() * avatars.length)];
-      const tmpHash = fs.readFileSync(path.join(AVATARS_DIR, tmp)).toString("base64").slice(0, 40);
-      if (tmpHash !== currentHash) {
-        pick = tmp;
-        break;
-      }
-    }
-    setActiveAvatarByName(pick);
-    return { ok: true, pick };
-  } else {
-    // sequential
-    const idx = CONFIG.rotationState?.index ?? 0;
-    const pick = avatars[idx % avatars.length];
-    setActiveAvatarByName(pick);
-    CONFIG.rotationState = { index: (idx + 1) % avatars.length };
-    writeConfig(CONFIG);
-    return { ok: true, pick };
+async function getAIResponse(userMessage) {
+  let stylePrompt = "";
+  switch (config.personality) {
+    case "friendly":
+      stylePrompt = "Reply in a warm, kind, supportive tone.";
+      break;
+    case "formal":
+      stylePrompt = "Reply in a professional and polite style.";
+      break;
+    case "playful":
+      stylePrompt = "Reply with humor, emojis, and a lighthearted style.";
+      break;
+    case "tutor":
+      stylePrompt = "Reply like a patient teacher explaining concepts clearly.";
+      break;
+    case "gamer":
+      stylePrompt = "Reply with gaming slang, hype, and gamer style.";
+      break;
   }
+
+  const completion = await openai.createChatCompletion({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: `You are Luna, an AI assistant. ${stylePrompt}` },
+      { role: "user", content: userMessage }
+    ]
+  });
+
+  return completion.data.choices[0].message.content.trim();
 }
 
-/* -------------------- Scheduler: daily rotation -------------------- */
-// Runs every 60s, rotates when local time matches configured "HH:MM" and not already done today
-setInterval(() => {
-  try {
-    const { enabled, time } = CONFIG.rotation || {};
-    if (!enabled || !time) return;
-    const now = new Date();
-    const hhmm = now.toTimeString().slice(0, 5); // "HH:MM"
-    const today = now.toISOString().slice(0, 10);
-    if (hhmm === time && CONFIG.rotation.lastRotated !== today) {
-      const result = rotateAvatarNow();
-      CONFIG.rotation.lastRotated = today;
-      writeConfig(CONFIG);
-      console.log("🔄 Avatar rotation", result);
-    }
-  } catch (e) {
-    console.error("Rotation error:", e.message);
-  }
-}, 60 * 1000);
+// ========== TELEGRAM BOT ==========
+const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
 
-/* -------------------- Web Chat Endpoint -------------------- */
-app.post("/chat", async (req, res) => {
-  const { user, message } = req.body || {};
-  if (!user || !message) return res.status(400).json({ error: "Missing user or message" });
+bot.on("text", async (ctx) => {
+  const userMessage = ctx.message.text;
+  const reply = await getAIResponse(userMessage);
+  await ctx.reply(reply);
+});
 
-  if (!sessions[user]) sessions[user] = [systemMessage()];
-  sessions[user].push({ role: "user", content: message });
+// ========== WEBHOOK ==========
+app.use(bot.webhookCallback("/telegram-webhook"));
+bot.telegram.setWebhook(`${RENDER_EXTERNAL_URL}/telegram-webhook`);
 
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: sessions[user]
-    });
+// ========== API ROUTES ==========
 
-    const reply = response.choices?.[0]?.message?.content ?? "…";
-    sessions[user].push({ role: "assistant", content: reply });
-    logs.push({ user, message, reply, time: new Date().toISOString() });
+// Get current settings
+app.get("/api/settings", (req, res) => {
+  res.json(config);
+});
 
-    // (Optional) TTS audio (comment out if not using)
-    let audioPath = "";
-    try {
-      const audioResp = await openai.audio.speech.create({
-        model: "gpt-4o-mini-tts",
-        voice: "alloy",
-        input: reply
-      });
-      audioPath = `public/reply_${Date.now()}.mp3`;
-      const buffer = Buffer.from(await audioResp.arrayBuffer());
-      fs.writeFileSync(audioPath, buffer);
-    } catch (e) {
-      // non-fatal
-      console.warn("TTS error (web):", e.message);
-    }
+// Update settings
+app.post("/api/settings", (req, res) => {
+  const { personality, avatar, rotation } = req.body;
+  if (personality) config.personality = personality;
+  if (avatar) config.avatar = avatar;
+  if (rotation) config.rotation = rotation;
 
-    res.json({ reply, audio: audioPath ? audioPath.replace("public/", "") : "" });
-  } catch (err)
+  saveConfig();
+  res.json({ success: true, config });
+});
+
+// Avatar listing
+app.get("/api/avatars", (req, res) => {
+  const avatarDir = path.join(__dirname, "public", "avatars");
+  const files = fs.readdirSync(avatarDir);
+  res.json(files);
+});
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
+});
+
+// ========== START SERVER ==========
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Luna server running on http://localhost:${PORT}`);
+});
