@@ -1,303 +1,85 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Luna — Virtual Companion</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Luna Web Chat</title>
   <style>
-    body { font-family: system-ui, Arial; margin:0; background:#0b0e14; color:#e6eef8; }
-    header { background:#1f2937; padding:12px 16px; display:flex; gap:12px; align-items:center; }
-    header img { width:48px; height:48px; border-radius:50%; }
-    header h1 { margin:0; font-size:18px; }
-    nav { display:flex; gap:6px; padding:8px; background:#0f1724; }
-    nav button { padding:8px 12px; border-radius:8px; border:1px solid #23303d; background:#111827; color:#e6eef8; cursor:pointer; }
-    nav button.active { background:#2563eb; }
-    main { display:flex; gap:20px; padding:16px; max-width:1100px; margin:0 auto; }
-    .left { flex:1; display:flex; flex-direction:column; gap:12px; }
-    .chat { background:#0b1220; border:1px solid #172033; border-radius:10px; padding:12px; height:60vh; overflow:auto; }
-    .inputRow { display:flex; gap:8px; }
-    input[type="text"] { flex:1; padding:10px; border-radius:8px; border:1px solid #22303a; background:#071226; color:#e6eef8; }
-    button.primary { background:#2563eb; border:none; color:white; padding:10px 14px; border-radius:8px; cursor:pointer; }
-    .right { width:360px; }
-    .card { background:#071126; border:1px solid #122032; padding:12px; border-radius:8px; margin-bottom:12px; }
-    .msg.user { text-align:right; color:#9ad0ff; margin:8px 0; }
-    .msg.bot { text-align:left; color:#d6e6ff; margin:8px 0; }
-    pre { white-space:pre-wrap; word-wrap:break-word; }
-    .controls small { color:#9aa7b8; }
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f9; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; background: #fff; }
+    .msg { margin: 5px 0; }
+    .user { color: blue; }
+    .luna { color: green; }
+    #controls { margin-top: 10px; }
+    button { margin: 5px; padding: 8px 12px; }
   </style>
 </head>
 <body>
-  <header>
-    <img src="https://i.imgur.com/3Z3Z3Z3.png" alt="avatar" id="avatar">
-    <div>
-      <h1>🌙 Luna — Virtual Companion</h1>
-      <small id="subtitle">Voice + text chat • Web + Telegram</small>
-    </div>
-  </header>
+  <h2>💬 Chat with Luna</h2>
+  <div id="chat"></div>
 
-  <nav>
-    <button id="tabChat" class="active" onclick="showTab('chat')">Chat</button>
-    <button id="tabAdmin" onclick="showTab('admin')">Admin</button>
-  </nav>
-
-  <main>
-    <div class="left">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <strong>Luna</strong><br/>
-            <small id="status">checking status…</small>
-          </div>
-          <div>
-            <button class="primary" id="voiceBtn">🎙️ Speak</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="chatTab" class="card">
-        <div id="chat" class="chat"></div>
-        <div class="inputRow">
-          <input id="textInput" placeholder="Type or use the mic (try: /imagine a friendly robot on the moon)">
-          <button class="primary" id="sendBtn">Send</button>
-          <button id="ttsBtn">🔊 Voice Reply</button>
-        </div>
-        <div class="controls">
-          <small>Commands: <code>/imagine &lt;prompt&gt;</code> (image), <code>/voice &lt;text&gt;</code> (generate audio)</small>
-        </div>
-      </div>
-
-      <!-- Admin tab (hidden by default) -->
-      <div id="adminTab" style="display:none;">
-        <div class="card">
-          <label>Admin token: <input id="adminToken" type="password" /></label>
-          <button onclick="unlock()">Unlock</button>
-        </div>
-
-        <div class="card">
-          <h3>System Status</h3>
-          <pre id="adminStatus">Locked</pre>
-          <button onclick="loadStatus()">Refresh</button>
-        </div>
-
-        <div class="card">
-          <h3>Users</h3>
-          <table style="width:100%"><thead><tr><th>User</th><th>Actions</th></tr></thead><tbody id="usersTable"></tbody></table>
-          <button onclick="loadUsers()">Refresh Users</button>
-          <button onclick="resetAll()">Reset All</button>
-        </div>
-
-        <div class="card">
-          <h3>History / Logs</h3>
-          <pre id="historyArea">Select a user and click History or Logs</pre>
-        </div>
-      </div>
-    </div>
-
-    <aside class="right">
-      <div class="card">
-        <strong>Avatar</strong><br/>
-        <img id="avatarBig" src="https://i.imgur.com/3Z3Z3Z3.png" style="width:100%;border-radius:8px;margin-top:8px;" />
-        <p><small>Make Luna yours: replace the avatar image URL in public/index.html or serve your own avatar file.</small></p>
-      </div>
-
-      <div class="card">
-        <strong>Controls</strong>
-        <p><small>Use mic to speak — browser will transcribe (Web Speech API) and send text to Luna. Use Voice Reply to request TTS playback.</small></p>
-      </div>
-    </aside>
-  </main>
+  <div id="controls">
+    <input type="text" id="message" placeholder="Type your message..." />
+    <button onclick="sendMessage()">Send</button>
+    <button id="micBtn">🎤 Speak</button>
+  </div>
 
   <script>
-    // ---------- UI tabs ----------
-    function showTab(name) {
-      document.getElementById("chatTab").style.display = name === "chat" ? "block" : "none";
-      document.getElementById("adminTab").style.display = name === "admin" ? "block" : "none";
-      document.getElementById("tabChat").classList.toggle("active", name === "chat");
-      document.getElementById("tabAdmin").classList.toggle("active", name === "admin");
+    const chatBox = document.getElementById("chat");
+    const userId = localStorage.getItem("lunaUserId") || Date.now().toString();
+    localStorage.setItem("lunaUserId", userId);
+
+    // Display messages
+    function addMessage(role, text) {
+      const div = document.createElement("div");
+      div.classList.add("msg", role);
+      div.innerHTML = `<b>${role}:</b> ${text}`;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // ---------- basic state ----------
-    const userId = "web_" + Math.random().toString(36).slice(2,8);
-    const chatEl = document.getElementById("chat");
-    const textInput = document.getElementById("textInput");
-    const sendBtn = document.getElementById("sendBtn");
-    const voiceBtn = document.getElementById("voiceBtn");
-    const ttsBtn = document.getElementById("ttsBtn");
+    // Send message
+    async function sendMessage() {
+      const input = document.getElementById("message");
+      const msg = input.value.trim();
+      if (!msg) return;
+      addMessage("user", msg);
+      input.value = "";
 
-    function appendMsg(who, text) {
-      const d = document.createElement("div");
-      d.className = 'msg ' + (who === 'me' ? 'user' : 'bot');
-      d.innerText = (who === 'me' ? 'You: ' : 'Luna: ') + text;
-      chatEl.appendChild(d);
-      chatEl.scrollTop = chatEl.scrollHeight;
-    }
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, message: msg })
+      });
+      const data = await res.json();
+      addMessage("luna", data.reply);
 
-    async function sendText(msg) {
-      appendMsg('me', msg);
-      try {
-        const r = await fetch('/public-chat', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ userId, message: msg })
-        });
-        const j = await r.json();
-        if (j.type === 'image') {
-          const img = document.createElement('img'); img.src = j.reply; img.style.maxWidth='100%'; chatEl.appendChild(img);
-        } else if (j.type === 'audio') {
-          const audio = document.createElement('audio'); audio.controls=true; audio.src = j.reply; chatEl.appendChild(audio);
-        } else {
-          appendMsg('bot', j.reply || 'No reply');
-        }
-      } catch (e) {
-        appendMsg('bot', '⚠️ Error: ' + (e.message || e));
+      if (data.voiceUrl) {
+        const audio = new Audio(data.voiceUrl);
+        audio.play();
       }
     }
 
-    sendBtn.onclick = () => {
-      const txt = textInput.value.trim();
-      if (!txt) return;
-      sendText(txt);
-      textInput.value = '';
-    };
-
-    // Keyboard enter
-    textInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') sendBtn.click(); });
-
-    // ---------- Web Speech API (voice input) ----------
+    // Speech-to-text (Web Speech API)
+    const micBtn = document.getElementById("micBtn");
     let recognition;
-    let recognizing = false;
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.lang = 'en-US';
+    if ("webkitSpeechRecognition" in window) {
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = false;
       recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
+      recognition.lang = "en-US";
 
-      recognition.onresult = (event) => {
+      recognition.onresult = function(event) {
         const transcript = event.results[0][0].transcript;
-        sendText(transcript);
+        document.getElementById("message").value = transcript;
+        sendMessage();
       };
-      recognition.onend = () => { recognizing = false; voiceBtn.innerText = '🎙️ Speak'; };
-    } else {
-      voiceBtn.disabled = true;
-      voiceBtn.title = "Speech recognition not supported in this browser";
     }
 
-    voiceBtn.onclick = () => {
-      if (!recognition) return alert('Speech recognition not supported');
-      if (recognizing) {
-        recognition.stop();
-        recognizing = false;
-        voiceBtn.innerText = '🎙️ Speak';
-      } else {
-        recognition.start();
-        recognizing = true;
-        voiceBtn.innerText = '⏹ Stop';
-      }
-    };
-
-    // ---------- Voice Reply (request server TTS) ----------
-    ttsBtn.onclick = async () => {
-      const txt = textInput.value.trim() || 'Hello, how can I help?';
-      appendMsg('me', '(voice request) ' + txt);
-      try {
-        const r = await fetch('/public-voice', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ userId, message: txt })
-        });
-        const j = await r.json();
-        if (j.audioUrl) {
-          const audio = document.createElement('audio'); audio.controls=true; audio.src = j.audioUrl; chatEl.appendChild(audio);
-          appendMsg('bot', '[voice reply]');
-        } else {
-          appendMsg('bot', '⚠️ Voice generation failed');
-        }
-      } catch (e) {
-        appendMsg('bot', '⚠️ Error: ' + (e.message || e));
-      }
-      textInput.value = '';
-    };
-
-    // ---------- Admin functions ----------
-    let adminToken = '';
-    function unlock() {
-      adminToken = document.getElementById('adminToken').value.trim();
-      if (!adminToken) { alert('Enter token'); return; }
-      loadStatus();
-      loadUsers();
-      showTab('admin');
-    }
-
-    async function loadStatus() {
-      try {
-        const r = await fetch('/status', { headers: { 'x-admin-token': adminToken } });
-        const j = await r.json();
-        document.getElementById('adminStatus').innerText = JSON.stringify(j, null, 2);
-      } catch (e) { document.getElementById('adminStatus').innerText = 'Error: ' + e.message; }
-    }
-
-    async function loadUsers() {
-      try {
-        const r = await fetch('/admin/users?token=' + encodeURIComponent(adminToken));
-        const users = await r.json();
-        const tbody = document.getElementById('usersTable');
-        tbody.innerHTML = '';
-        users.forEach(u => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${u}</td><td>
-            <button onclick="resetUser('${u}')">Reset</button>
-            <button onclick="viewHistory('${u}')">History</button>
-            <button onclick="viewLogs('${u}')">Logs</button>
-            <button onclick="downloadLogs('${u}')">Download</button>
-          </td>`;
-          tbody.appendChild(tr);
-        });
-      } catch (e) { console.error(e); alert('Failed to load users'); }
-    }
-
-    async function resetUser(u) {
-      if (!confirm('Reset ' + u + '?')) return;
-      await fetch('/reset/' + u + '?token=' + encodeURIComponent(adminToken), { method:'DELETE' });
-      alert('Reset done'); loadUsers();
-    }
-
-    async function resetAll() {
-      if (!confirm('Reset ALL users?')) return;
-      await fetch('/admin/reset-all?token=' + encodeURIComponent(adminToken), { method:'DELETE' });
-      alert('All reset'); loadUsers();
-    }
-
-    async function viewHistory(u) {
-      try {
-        const r = await fetch('/admin/history/' + u + '?token=' + encodeURIComponent(adminToken));
-        const j = await r.json();
-        document.getElementById('historyArea').innerText = j.map(m => `${m.role}: ${m.content}`).join("\n\n");
-      } catch (e) { document.getElementById('historyArea').innerText = 'Error loading history'; }
-    }
-
-    async function viewLogs(u) {
-      try {
-        const r = await fetch('/admin/logs/' + u + '?token=' + encodeURIComponent(adminToken));
-        const txt = await r.text();
-        document.getElementById('historyArea').innerText = txt;
-      } catch (e) { document.getElementById('historyArea').innerText = 'Error loading logs'; }
-    }
-
-    function downloadLogs(u) {
-      const url = '/admin/logs/' + u + '/download?token=' + encodeURIComponent(adminToken);
-      window.open(url, '_blank');
-    }
-
-    // Check status quickly
-    (async ()=> {
-      try {
-        const r = await fetch('/status', { headers: { 'x-admin-token': '' } });
-        // this will likely return 403 if no token; ignore
-      } catch {}
-      document.getElementById('status').innerText = 'Ready';
-      appendMsg('bot','Hi — I am Luna. Speak, type, or upload a file.');
-    })();
+    micBtn.addEventListener("click", () => {
+      if (recognition) recognition.start();
+      else alert("Speech recognition not supported in this browser.");
+    });
   </script>
 </body>
 </html>
