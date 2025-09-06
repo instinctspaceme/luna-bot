@@ -1,17 +1,16 @@
 {
   "name": "luna-bot",
-  "version": "1.0.0",
-  "description": "Luna bot: Web UI + Telegram (polling) + OpenAI TTS + simple expressions",
-  "type": "module",
+  "version": "1.4.0",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
-    "express": "^4.19.2",
-    "openai": "^4.0.0",
-    "sentiment": "^5.0.2",
-    "telegraf": "^4.15.3"
+    "express": "^4.18.2",
+    "openai": "^4.57.0",
+    "telegraf": "^4.16.3",
+    "node-fetch": "^3.3.2"
   }
 }
