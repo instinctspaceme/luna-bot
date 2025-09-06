@@ -1,9 +1,7 @@
 {
   "name": "luna-bot",
   "version": "1.0.0",
-  "description": "Luna bot with web UI, TTS, avatars, and Telegram webhook",
   "type": "module",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
@@ -12,6 +10,7 @@
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
     "sentiment": "^5.0.2",
-    "telegraf": "^4.15.3"
+    "telegraf": "^4.15.3",
+    "openai": "^4.0.0"
   }
 }
