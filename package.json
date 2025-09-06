@@ -1,16 +1,16 @@
 {
   "name": "luna-bot",
   "version": "1.0.0",
+  "description": "Luna bot: Web UI + Telegram (webhook) + avatar expressions",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
     "express": "^4.19.2",
-    "node-fetch": "^3.3.2",
     "sentiment": "^5.0.2",
-    "telegraf": "^4.15.3",
-    "openai": "^4.0.0"
+    "telegraf": "^4.15.3"
   }
 }
