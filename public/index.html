@@ -1,154 +1,391 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Luna Web Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; background: #1e1e1e; color: #eee; transition: background 0.5s; }
-    #chat { max-width: 600px; margin: 20px auto; padding: 10px; background: #2c2c2c; border-radius: 8px; }
-    .message { margin: 5px 0; padding: 8px; border-radius: 5px; }
-    .user { background: #3a3a8a; text-align: right; }
-    .bot { background: #444; text-align: left; display: flex; justify-content: space-between; align-items: center; }
-    #inputArea { display: flex; margin-top: 10px; }
-    #userInput { flex: 1; padding: 8px; }
-    button { padding: 8px; background: #5c5cff; border: none; color: white; cursor: pointer; }
-    .playBtn { margin-left: 10px; background: #4CAF50; border: none; padding: 5px; border-radius: 4px; cursor: pointer; color: white; }
-    #settings { margin: 15px auto; max-width: 600px; padding: 10px; background: #2c2c2c; border-radius: 8px; }
-    label { display: block; margin-top: 8px; }
-    #micBtn { margin-left: 8px; background: red; }
+    :root {
+      --panel:#2c2c2c; --ink:#eee; --bg:#1e1e1e; --accent:#5c5cff; --ok:#4CAF50; --warn:#ff6b6b;
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0}
+    header{max-width:960px;margin:12px auto;padding:0 12px;display:flex;gap:12px;align-items:center}
+    #avatarWrap{width:140px;height:140px;background:#111;border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px #0006;position:relative;overflow:hidden}
+    #canvas{width:100%;height:100%}
+    #chatWrap{max-width:960px;margin:0 auto;padding:12px;display:grid;grid-template-columns:1fr;gap:12px}
+    #chat{padding:12px;background:var(--panel);border-radius:10px;max-height:50vh;overflow:auto}
+    .message{margin:6px 0;padding:8px 10px;border-radius:8px;white-space:pre-wrap;line-height:1.35}
+    .user{background:#3a3a8a}
+    .bot{background:#444}
+    #inputRow{display:flex;gap:8px}
+    input,select{background:#1f1f1f;color:var(--ink);border:1px solid #444;border-radius:8px;padding:10px}
+    button{background:var(--accent);color:white;border:none;border-radius:8px;padding:10px 14px;cursor:pointer}
+    .playBtn{background:var(--ok)}
+    #settings, #persona{background:var(--panel);border-radius:10px;padding:12px}
+    label{display:block;margin-top:8px}
+    #micBtn{background:#c62828}
+    #wake{margin-left:6px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   </style>
 </head>
 <body>
-  <div id="chat"></div>
+  <header>
+    <div id="avatarWrap">
+      <canvas id="canvas" width="140" height="140"></canvas>
+    </div>
+    <div>
+      <h2 style="margin:0 0 4px">Luna</h2>
+      <div class="row">
+        <button id="micBtn" onclick="toggleMic()">🎤 Mic</button>
+        <label class="row"><input id="wake" type="checkbox" onchange="toggleWake()"> Wake word: “Hey Luna”</label>
+      </div>
+      <small id="status"></small>
+    </div>
+  </header>
 
-  <div id="inputArea">
-    <input id="userInput" type="text" placeholder="Type or speak..."/>
-    <button onclick="sendMessage()">Send</button>
-    <button id="micBtn" onclick="toggleMic()">🎤</button>
-  </div>
+  <main id="chatWrap">
+    <div id="chat"></div>
+    <div id="inputRow">
+      <input id="userInput" type="text" placeholder="Type or speak…" />
+      <button onclick="sendMessage()">Send</button>
+      <button class="playBtn" onclick="replayLast()">🔊 Replay</button>
+    </div>
 
-  <div id="settings">
-    <h3>Personal Settings</h3>
-    <label>Background:
-      <select id="bgSelect" onchange="saveUserSettings()">
-        <option value="default">Default</option>
-        <option value="space">Space</option>
-        <option value="forest">Forest</option>
-        <option value="neon">Neon</option>
-      </select>
-    </label>
-    <label>Voice Pitch: <input id="pitch" type="range" min="0.5" max="2" step="0.1" value="1" onchange="saveUserSettings()"> </label>
-    <label>Voice Rate: <input id="rate" type="range" min="0.5" max="2" step="0.1" value="1" onchange="saveUserSettings()"> </label>
-  </div>
+    <section id="settings">
+      <h3>Personal Settings</h3>
+      <div class="row">
+        <label>Background
+          <select id="bgSelect" onchange="saveUserSettings()">
+            <option value="default">Default</option>
+            <option value="space">Space</option>
+            <option value="forest">Forest</option>
+            <option value="neon">Neon</option>
+          </select>
+        </label>
+
+        <label>Avatar Skin
+          <select id="skin" onchange="saveUserSettings()">
+            <option value="neo">Neo</option>
+            <option value="pearl">Pearl</option>
+            <option value="onyx">Onyx</option>
+          </select>
+        </label>
+
+        <label style="min-width:160px">Voice Pitch
+          <input id="pitch" type="range" min="0.7" max="1.5" step="0.05" value="1" onchange="saveUserSettings()">
+        </label>
+
+        <label style="min-width:160px">Voice Rate
+          <input id="rate" type="range" min="0.7" max="1.5" step="0.05" value="1" onchange="saveUserSettings()">
+        </label>
+      </div>
+    </section>
+
+    <section id="persona">
+      <h3>Session Memory</h3>
+      <small>We keep the last 12 messages locally to keep context.</small>
+    </section>
+  </main>
 
   <script>
-    let recognition;
-    let isListening = false;
+    // ---------------- Avatar (Canvas) with lip-sync + expressions ----------------
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let avatarState = {
+      mood: "neutral", // happy, neutral, think, surprised, sad
+      mouthOpen: 0,    // 0..1 (driven by audio amplitude)
+      blink: 0,        // 0..1 (blink animation)
+      skin: "neo"
+    };
+
+    function skinColors(skin){
+      if(skin==="pearl") return { base:"#F6F1F1", shade:"#E4DEDE", stroke:"#3333" };
+      if(skin==="onyx")  return { base:"#1b1b1b", shade:"#111", stroke:"#ffffff22" };
+      return { base:"#222b35", shade:"#1a222b", stroke:"#ffffff22" }; // neo
+    }
+
+    function drawAvatar(){
+      const {base,shade,stroke} = skinColors(avatarState.skin);
+      ctx.clearRect(0,0,140,140);
+
+      // head
+      ctx.fillStyle = base;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(70,72,48,0,Math.PI*2);
+      ctx.fill(); ctx.stroke();
+
+      // cheeks/shadow
+      ctx.fillStyle = shade;
+      ctx.beginPath();
+      ctx.arc(70,90,40,0,Math.PI);
+      ctx.fill();
+
+      // eyes
+      const blink = avatarState.blink;
+      const eyeY = 60 + (blink*6);
+      const eyeH = Math.max(2, 8 - (blink*7));
+      ctx.fillStyle = "#fff";
+      // whites
+      ctx.fillRect(45, eyeY-6, 18, eyeH);
+      ctx.fillRect(77, eyeY-6, 18, eyeH);
+      // pupils
+      ctx.fillStyle = "#111";
+      const mood = avatarState.mood;
+      const px = mood==="think" ? -2 : 0;
+      ctx.beginPath(); ctx.arc(54+px, eyeY-2, 3, 0, 6.28); ctx.fill();
+      ctx.beginPath(); ctx.arc(86+px, eyeY-2, 3, 0, 6.28); ctx.fill();
+
+      // eyebrows
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if(mood==="surprised"){ ctx.moveTo(40,48); ctx.lineTo(60,44); ctx.moveTo(80,44); ctx.lineTo(100,48); }
+      else if(mood==="sad"){ ctx.moveTo(40,52); ctx.lineTo(60,55); ctx.moveTo(80,55); ctx.lineTo(100,52); }
+      else if(mood==="happy"){ ctx.moveTo(40,50); ctx.lineTo(60,48); ctx.moveTo(80,48); ctx.lineTo(100,50); }
+      else { ctx.moveTo(40,50); ctx.lineTo(60,50); ctx.moveTo(80,50); ctx.lineTo(100,50); }
+      ctx.stroke();
+
+      // mouth (lip-sync)
+      const open = avatarState.mouthOpen; // 0..1
+      ctx.fillStyle = "#111";
+      ctx.beginPath();
+      const w = 32 + open*10;
+      const h = 8 + open*16;
+      const x = 70 - w/2;
+      const y = 95;
+      roundRect(ctx, x, y, w, h, 8);
+      ctx.fill();
+
+      // subtle outline
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+    }
+
+    function roundRect(ctx,x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y, x+w,y+h, r);
+      ctx.arcTo(x+w,y+h, x, y+h, r);
+      ctx.arcTo(x,y+h, x, y, r);
+      ctx.arcTo(x,y, x+w, y, r);
+      ctx.closePath();
+    }
+
+    // blink loop
+    setInterval(()=> {
+      avatarState.blink = Math.random() < 0.08 ? 1 : Math.max(0, avatarState.blink - 0.25);
+      drawAvatar();
+    }, 120);
+
+    // ---------------- Personalization ----------------
+    const statusEl = document.getElementById("status");
+    const chat = document.getElementById("chat");
+    const pitchEl = document.getElementById("pitch");
+    const rateEl  = document.getElementById("rate");
+    const bgEl    = document.getElementById("bgSelect");
+    const skinEl  = document.getElementById("skin");
+    let lastAudioBase64 = null;
+
+    function applyBackground(bg) {
+      if (bg === "space") document.body.style.background = "url('https://picsum.photos/seed/space/1400/900') no-repeat center/cover";
+      else if (bg === "forest") document.body.style.background = "url('https://picsum.photos/seed/forest/1400/900') no-repeat center/cover";
+      else if (bg === "neon") document.body.style.background = "linear-gradient(135deg, #ff00ff, #00ffff)";
+      else document.body.style.background = "#1e1e1e";
+    }
+
+    function saveUserSettings() {
+      const user = {
+        bg: bgEl.value,
+        skin: skinEl.value,
+        pitch: pitchEl.value,
+        rate: rateEl.value
+      };
+      localStorage.setItem("userSettings", JSON.stringify(user));
+      avatarState.skin = user.skin;
+      applyBackground(user.bg);
+      drawAvatar();
+    }
+
+    function loadUserSettings() {
+      const saved = localStorage.getItem("userSettings");
+      if (saved) {
+        const s = JSON.parse(saved);
+        bgEl.value = s.bg || "default";
+        skinEl.value = s.skin || "neo";
+        pitchEl.value = s.pitch || 1;
+        rateEl.value = s.rate || 1;
+        avatarState.skin = skinEl.value || "neo";
+        applyBackground(bgEl.value);
+      } else {
+        // fallback to global background (optional: you can fetch /config and apply)
+      }
+      drawAvatar();
+    }
+
+    // ---------------- Chat UI ----------------
+    let history = JSON.parse(localStorage.getItem("history") || "[]");
+
+    function addMessage(sender, text, audioBase64 = null) {
+      const msg = document.createElement("div");
+      msg.className = `message ${sender}`;
+      msg.textContent = text;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+      if (audioBase64) lastAudioBase64 = audioBase64;
+    }
+
+    function replayLast(){
+      if (!lastAudioBase64) return;
+      playAudio(lastAudioBase64);
+    }
+
+    function playAudio(base64){
+      const audio = new Audio("data:audio/mpeg;base64," + base64);
+      // playback rate is handled by avatar voice emotion mapping visually; we keep default here for quality
+      wireLipSync(audio); // connect analyser to drive mouth
+      audio.play();
+    }
+
+    // ---------------- Lip-Sync via WebAudio ----------------
+    let audioCtx, analyser, dataArray;
+    function wireLipSync(audioEl){
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+      }
+      const src = audioCtx.createMediaElementSource(audioEl);
+      src.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      requestAnimationFrame(updateMouth);
+    }
+
+    function updateMouth(){
+      if (!analyser) return;
+      analyser.getByteFrequencyData(dataArray);
+      // average of lower freqs to estimate loudness for mouth
+      let sum = 0;
+      for (let i = 2; i < 20; i++) sum += dataArray[i];
+      const avg = sum / 18;
+      const openness = Math.min(1, avg / 90); // tune
+      avatarState.mouthOpen = openness;
+      drawAvatar();
+      requestAnimationFrame(updateMouth);
+    }
+
+    // ---------------- Speech Recognition + Wake Word ----------------
+    let recognition, isListening = false, wakeEnabled = false;
+    const micBtn = document.getElementById("micBtn");
 
     if ("webkitSpeechRecognition" in window) {
       recognition = new webkitSpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = "en-US";
-
-      recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
         document.getElementById("userInput").value = transcript;
         sendMessage();
       };
+      recognition.onerror = (e) => statusEl.textContent = "Mic error: " + e.error;
+      recognition.onend = () => { micBtn.style.background = "#c62828"; isListening = false; };
+    }
 
-      recognition.onerror = function(event) {
-        console.error("Mic error:", event.error);
+    function toggleMic(){
+      if (!recognition) { alert("Speech recognition not supported in this browser."); return; }
+      if (!isListening) { recognition.start(); micBtn.style.background = "green"; isListening = true; }
+      else { recognition.stop(); }
+    }
+
+    function toggleWake(){
+      wakeEnabled = document.getElementById("wake").checked;
+      statusEl.textContent = wakeEnabled ? "Wake word enabled." : "";
+      if (wakeEnabled) beginWakeLoop();
+    }
+
+    // Simple “Hey Luna” detector using continuous speech recognition restarts
+    async function beginWakeLoop(){
+      if (!recognition) return;
+      const wakeRec = new webkitSpeechRecognition();
+      wakeRec.continuous = true; wakeRec.interimResults = true; wakeRec.lang = "en-US";
+      wakeRec.onresult = (e) => {
+        const text = Array.from(e.results).map(r => r[0].transcript).join(" ").toLowerCase();
+        if (text.includes("hey luna")) {
+          statusEl.textContent = "👂 Listening…";
+          wakeRec.stop();
+          toggleMic();
+          setTimeout(()=> wakeEnabled && beginWakeLoop(), 4000);
+        }
       };
-
-      recognition.onend = function() {
-        document.getElementById("micBtn").style.background = "red";
-        isListening = false;
-      };
+      wakeRec.onerror = () => { /* ignore */ };
+      wakeRec.onend = () => { if (wakeEnabled) beginWakeLoop(); };
+      wakeRec.start();
     }
 
-    function toggleMic() {
-      if (!recognition) {
-        alert("❌ Speech recognition not supported in this browser.");
-        return;
-      }
-      if (!isListening) {
-        recognition.start();
-        document.getElementById("micBtn").style.background = "green";
-        isListening = true;
-      } else {
-        recognition.stop();
-        document.getElementById("micBtn").style.background = "red";
-        isListening = false;
-      }
+    // ---------------- Emotion Mapping ----------------
+    function moodFromSentiment(s){
+      if (s >= 2) return "happy";
+      if (s === 1) return "happy";
+      if (s === 0) return "neutral";
+      if (s === -1) return "think";
+      return "sad";
     }
 
-    function applyBackground(bg) {
-      if (bg === "space") document.body.style.background = "url('https://picsum.photos/seed/space/1200/800') no-repeat center/cover";
-      else if (bg === "forest") document.body.style.background = "url('https://picsum.photos/seed/forest/1200/800') no-repeat center/cover";
-      else if (bg === "neon") document.body.style.background = "linear-gradient(135deg, #ff00ff, #00ffff)";
-      else document.body.style.background = "#1e1e1e";
+    function applyEmotionVoiceBase(pitch, rate, s){ // s -2..2
+      let p = parseFloat(pitch), r = parseFloat(rate);
+      if (s >= 1) { p += 0.1; r += 0.05; }
+      if (s <= -1){ p -= 0.1; r -= 0.05; }
+      return { pitch: Math.max(0.7, Math.min(1.5, p)), rate: Math.max(0.7, Math.min(1.5, r)) };
     }
 
-    function saveUserSettings() {
-      const bg = document.getElementById("bgSelect").value;
-      const pitch = document.getElementById("pitch").value;
-      const rate = document.getElementById("rate").value;
-      localStorage.setItem("userSettings", JSON.stringify({ bg, pitch, rate }));
-      applyBackground(bg);
-    }
-
-    function loadUserSettings() {
-      const saved = localStorage.getItem("userSettings");
-      if (saved) {
-        const { bg, pitch, rate } = JSON.parse(saved);
-        document.getElementById("bgSelect").value = bg;
-        document.getElementById("pitch").value = pitch;
-        document.getElementById("rate").value = rate;
-        applyBackground(bg);
-      }
-    }
-
-    function addMessage(sender, text, audioBase64 = null, pitch = 1, rate = 1) {
-      const chat = document.getElementById("chat");
-      const msg = document.createElement("div");
-      msg.classList.add("message", sender);
-      if (sender === "bot" && audioBase64) {
-        msg.innerHTML = `<span>${text}</span>
-          <button class="playBtn" onclick="playAudio('${audioBase64}', ${pitch}, ${rate})">🔊</button>`;
-      } else msg.innerText = text;
-      chat.appendChild(msg);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    function playAudio(base64, pitch = 1, rate = 1) {
-      const audio = new Audio("data:audio/mpeg;base64," + base64);
-      audio.playbackRate = rate;
-      audio.play();
-    }
-
-    async function sendMessage() {
+    // ---------------- Send Message ----------------
+    async function sendMessage(){
       const input = document.getElementById("userInput");
       const message = input.value.trim();
       if (!message) return;
+
       addMessage("user", message);
+      history.push({ role: "user", content: message });
+      localStorage.setItem("history", JSON.stringify(history.slice(-12)));
       input.value = "";
 
-      const settings = JSON.parse(localStorage.getItem("userSettings")) || { pitch: 1, rate: 1 };
+      const settings = JSON.parse(localStorage.getItem("userSettings") || "{}");
+      const basePitch = settings.pitch || 1;
+      const baseRate  = settings.rate || 1;
 
       try {
         const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, pitch: settings.pitch, rate: settings.rate })
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ message, history, pitch: basePitch, rate: baseRate })
         });
         const data = await res.json();
-        addMessage("bot", data.reply, data.audio, settings.pitch, settings.rate);
+
+        // avatar mood + emotion voice adjustment (client-side only visual/UX)
+        const mood = moodFromSentiment(data.sentiment ?? 0);
+        avatarState.mood = mood;
+        const tuned = applyEmotionVoiceBase(basePitch, baseRate, data.sentiment ?? 0);
+
+        addMessage("bot", data.reply, data.audio);
+        history.push({ role: "assistant", content: data.reply });
+        localStorage.setItem("history", JSON.stringify(history.slice(-12)));
+
+        // play with lip-sync
+        if (data.audio) playAudio(data.audio);
+
+        // small visual nudge
+        statusEl.textContent = `Mood: ${mood} | Pitch: ${tuned.pitch.toFixed(2)} Rate: ${tuned.rate.toFixed(2)}`;
       } catch (err) {
-        addMessage("bot", "⚠️ Error: " + err.message);
+        addMessage("bot", "⚠️ " + err.message);
       }
     }
 
+    // ---------------- Init ----------------
     loadUserSettings();
   </script>
 </body>
