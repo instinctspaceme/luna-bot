@@ -1,96 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>Luna Admin Panel</title>
+  <title>Luna Admin</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#1e1e1e;color:#eee;margin:0;padding:20px}
-    .card{background:#2c2c2c;border-radius:10px;padding:16px;max-width:720px}
-    input,select,button{padding:10px;border-radius:8px;border:1px solid #444;background:#1f1f1f;color:#eee}
-    button{background:#5c5cff;border:none;cursor:pointer}
-    label{display:block;margin-top:10px}
+    body { font-family: Arial; padding: 20px; }
+    img { width: 80px; margin: 5px; border: 2px solid transparent; cursor: pointer; }
+    img.selected { border-color: blue; }
   </style>
 </head>
 <body>
-  <h2>⚙️ Luna Admin Panel</h2>
-  <div class="card">
-    <label>Personality
-      <input id="personality" placeholder="friendly, witty, serious…" />
-    </label>
-
-    <label>Default Voice
-      <select id="voice">
-        <option value="alloy">Alloy</option>
-        <option value="verse">Verse</option>
-        <option value="soft">Soft</option>
-        <option value="energetic">Energetic</option>
-        <option value="robotic">Robotic</option>
-      </select>
-    </label>
-
-    <label>Global Background
-      <select id="background">
-        <option value="default">Default</option>
-        <option value="space">Space</option>
-        <option value="forest">Forest</option>
-        <option value="neon">Neon</option>
-      </select>
-    </label>
-
-    <label>Default Avatar Skin
-      <select id="avatar">
-        <option value="neo">Neo</option>
-        <option value="pearl">Pearl</option>
-        <option value="onyx">Onyx</option>
-      </select>
-    </label>
-
-    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-      <button onclick="saveConfig()">💾 Save</button>
-      <button onclick="testVoice()">🔊 Test Voice</button>
-      <span id="status" style="margin-left:8px"></span>
-    </div>
-  </div>
+  <h1>🌙 Luna Admin Panel</h1>
+  <h2>Select Global Avatar</h2>
+  <div id="avatars"></div>
+  <button onclick="saveConfig()">Save</button>
 
   <script>
-    async function saveConfig(){
-      const payload = {
-        personality: document.getElementById("personality").value,
-        voice: document.getElementById("voice").value,
-        background: document.getElementById("background").value,
-        avatar: document.getElementById("avatar").value
-      };
-      const res = await fetch("/config", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify(payload)
+    let selected = "";
+
+    async function loadAvatars() {
+      const res = await fetch("/avatars");
+      const files = await res.json();
+      const container = document.getElementById("avatars");
+      files.forEach(f => {
+        const img = document.createElement("img");
+        img.src = f;
+        img.onclick = () => {
+          document.querySelectorAll("img").forEach(i => i.classList.remove("selected"));
+          img.classList.add("selected");
+          selected = f;
+        };
+        container.appendChild(img);
       });
-      const data = await res.json();
-      document.getElementById("status").textContent = "Saved ✔ " + new Date().toLocaleTimeString();
     }
 
-    async function testVoice(){
-      const voice = document.getElementById("voice").value;
-      const res = await fetch("/test-voice", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ voice })
+    async function saveConfig() {
+      if (!selected) return alert("Pick one first!");
+      await fetch("/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ globalAvatar: selected })
       });
-      const data = await res.json();
-      if (data.audio) {
-        new Audio("data:audio/mpeg;base64," + data.audio).play();
-      } else {
-        alert("Error: " + (data.error || "unknown"));
-      }
+      alert("Saved!");
     }
 
-    // load current
-    fetch("/config").then(r=>r.json()).then(cfg=>{
-      document.getElementById("personality").value = cfg.personality || "";
-      document.getElementById("voice").value = cfg.voice || "alloy";
-      document.getElementById("background").value = cfg.background || "default";
-      document.getElementById("avatar").value = cfg.avatar || "neo";
-    });
+    loadAvatars();
   </script>
 </body>
 </html>
