@@ -1,141 +1,96 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Luna Admin</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <title>Luna Admin Panel</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#1e1e1e;color:#eee;margin:0;padding:20px}
+    .card{background:#2c2c2c;border-radius:10px;padding:16px;max-width:720px}
+    input,select,button{padding:10px;border-radius:8px;border:1px solid #444;background:#1f1f1f;color:#eee}
+    button{background:#5c5cff;border:none;cursor:pointer}
+    label{display:block;margin-top:10px}
+  </style>
 </head>
 <body>
-  <h1>🛠️ Luna Admin</h1>
-
-  <section class="card">
-    <h3>Authenticate</h3>
-    <input id="pin" placeholder="Enter admin PIN" type="password" />
-    <button id="lockBtn">Unlock</button>
-    <span id="authStatus"></span>
-  </section>
-
-  <section class="card">
-    <h3>Current</h3>
-    <div>
-      <img id="preview" class="avatar" src="" />
-      <span id="curText"></span>
-    </div>
-  </section>
-
-  <section class="card">
-    <h3>Settings</h3>
-    <label>Personality:
-      <select id="personality">
-        <option value="friendly">friendly</option>
-        <option value="formal">formal</option>
-        <option value="playful">playful</option>
-        <option value="tutor">tutor</option>
-        <option value="gamer">gamer</option>
-      </select>
+  <h2>⚙️ Luna Admin Panel</h2>
+  <div class="card">
+    <label>Personality
+      <input id="personality" placeholder="friendly, witty, serious…" />
     </label>
 
-    <label>Rotation:
-      <select id="rotation">
-        <option value="none">none</option>
-        <option value="daily-random">daily-random</option>
-        <option value="daily-sequence">daily-sequence</option>
-      </select>
-    </label>
-
-    <label>Fixed avatar:
-      <select id="avatar"></select>
-    </label>
-
-    <label>Voice:
+    <label>Default Voice
       <select id="voice">
-        <option value="alloy">alloy</option>
-        <option value="verse">verse</option>
-        <option value="serene">serene</option>
+        <option value="alloy">Alloy</option>
+        <option value="verse">Verse</option>
+        <option value="soft">Soft</option>
+        <option value="energetic">Energetic</option>
+        <option value="robotic">Robotic</option>
       </select>
     </label>
 
-    <button id="saveBtn" disabled>💾 Save</button>
-    <span id="status"></span>
-  </section>
+    <label>Global Background
+      <select id="background">
+        <option value="default">Default</option>
+        <option value="space">Space</option>
+        <option value="forest">Forest</option>
+        <option value="neon">Neon</option>
+      </select>
+    </label>
 
-  <section class="card">
-    <h3>Upload New Avatar</h3>
-    <input id="file" type="file" accept="image/*" />
-    <button id="uploadBtn" disabled>Upload</button>
-    <div id="uploadStatus"></div>
-  </section>
+    <label>Default Avatar Skin
+      <select id="avatar">
+        <option value="neo">Neo</option>
+        <option value="pearl">Pearl</option>
+        <option value="onyx">Onyx</option>
+      </select>
+    </label>
+
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <button onclick="saveConfig()">💾 Save</button>
+      <button onclick="testVoice()">🔊 Test Voice</button>
+      <span id="status" style="margin-left:8px"></span>
+    </div>
+  </div>
 
   <script>
-    let authed = false;
-    let pinVal = "";
-
-    async function load() {
-      const s = await (await fetch("/api/settings")).json();
-      document.getElementById("personality").value = s.personality;
-      document.getElementById("rotation").value = s.rotation;
-      document.getElementById("voice").value = s.voice || "alloy";
-
-      const list = await (await fetch("/api/avatars")).json();
-      const sel = document.getElementById("avatar");
-      sel.innerHTML = list.map(n => `<option value="${n}">${n}</option>`).join("");
-      sel.value = s.avatar;
-
-      document.getElementById("preview").src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
-      document.getElementById("curText").innerText = `Active avatar: ${s.activeAvatar}`;
-    }
-
-    async function save() {
-      if (!authed) return;
-      const body = {
+    async function saveConfig(){
+      const payload = {
         personality: document.getElementById("personality").value,
-        rotation: document.getElementById("rotation").value,
-        avatar: document.getElementById("avatar").value,
-        voice: document.getElementById("voice").value
+        voice: document.getElementById("voice").value,
+        background: document.getElementById("background").value,
+        avatar: document.getElementById("avatar").value
       };
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-pin": pinVal },
-        body: JSON.stringify(body)
+      const res = await fetch("/config", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
-      document.getElementById("status").innerText = data.success ? "✅ Saved" : ("❌ " + (data.error || "Failed"));
-      await load();
+      document.getElementById("status").textContent = "Saved ✔ " + new Date().toLocaleTimeString();
     }
 
-    async function uploadAvatar() {
-      if (!authed) return;
-      const f = document.getElementById("file").files[0];
-      if (!f) { document.getElementById("uploadStatus").innerText = "Select a file."; return; }
-      const fd = new FormData();
-      fd.append("avatar", f);
-      const res = await fetch("/api/upload-avatar", {
-        method: "POST",
-        headers: { "x-admin-pin": pinVal },
-        body: fd
+    async function testVoice(){
+      const voice = document.getElementById("voice").value;
+      const res = await fetch("/test-voice", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ voice })
       });
       const data = await res.json();
-      if (data.success) {
-        document.getElementById("uploadStatus").innerText = `✅ Uploaded: ${data.filename}`;
-        await load();
+      if (data.audio) {
+        new Audio("data:audio/mpeg;base64," + data.audio).play();
       } else {
-        document.getElementById("uploadStatus").innerText = `❌ ${data.error || "Upload failed"}`;
+        alert("Error: " + (data.error || "unknown"));
       }
     }
 
-    document.getElementById("saveBtn").onclick = save;
-    document.getElementById("uploadBtn").onclick = uploadAvatar;
-
-    document.getElementById("lockBtn").onclick = () => {
-      pinVal = document.getElementById("pin").value.trim();
-      if (!pinVal) { document.getElementById("authStatus").innerText = "Enter a PIN."; return; }
-      authed = true;
-      document.getElementById("authStatus").innerText = "🔓 Unlocked (PIN will be sent with actions)";
-      document.getElementById("saveBtn").disabled = false;
-      document.getElementById("uploadBtn").disabled = false;
-    };
-
-    load();
+    // load current
+    fetch("/config").then(r=>r.json()).then(cfg=>{
+      document.getElementById("personality").value = cfg.personality || "";
+      document.getElementById("voice").value = cfg.voice || "alloy";
+      document.getElementById("background").value = cfg.background || "default";
+      document.getElementById("avatar").value = cfg.avatar || "neo";
+    });
   </script>
 </body>
 </html>
