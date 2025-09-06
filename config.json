@@ -1,5 +1,6 @@
 {
-  "globalAvatar": "luna1.png",
-  "background": "default.jpg",
-  "voice": "alloy"
+  "personality": "friendly",
+  "voice": "alloy",
+  "background": "#1e1e1e",
+  "avatar": "/avatars/luna.png"
 }
