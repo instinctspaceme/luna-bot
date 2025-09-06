@@ -1,50 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Luna Admin</title>
+  <title>Luna Admin Panel</title>
   <style>
-    body { font-family: Arial; padding: 20px; }
-    img { width: 80px; margin: 5px; border: 2px solid transparent; cursor: pointer; }
-    img.selected { border-color: blue; }
+    body { font-family: Arial, sans-serif; background: #121212; color: white; text-align: center; }
+    input, select { margin: 10px; padding: 5px; }
   </style>
 </head>
 <body>
-  <h1>🌙 Luna Admin Panel</h1>
-  <h2>Select Global Avatar</h2>
-  <div id="avatars"></div>
+  <h1>Admin Panel</h1>
+  <label>Personality:</label>
+  <input type="text" id="personality"><br>
+  <label>Voice:</label>
+  <input type="text" id="voice"><br>
+  <label>Avatar (path inside /public/avatars):</label>
+  <input type="text" id="avatar"><br>
   <button onclick="saveConfig()">Save</button>
-
-  <script>
-    let selected = "";
-
-    async function loadAvatars() {
-      const res = await fetch("/avatars");
-      const files = await res.json();
-      const container = document.getElementById("avatars");
-      files.forEach(f => {
-        const img = document.createElement("img");
-        img.src = f;
-        img.onclick = () => {
-          document.querySelectorAll("img").forEach(i => i.classList.remove("selected"));
-          img.classList.add("selected");
-          selected = f;
-        };
-        container.appendChild(img);
-      });
-    }
-
-    async function saveConfig() {
-      if (!selected) return alert("Pick one first!");
-      await fetch("/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ globalAvatar: selected })
-      });
-      alert("Saved!");
-    }
-
-    loadAvatars();
-  </script>
+<script>
+async function loadConfig() {
+  const res = await fetch("/config");
+  const cfg = await res.json();
+  document.getElementById("personality").value = cfg.personality;
+  document.getElementById("voice").value = cfg.voice;
+  document.getElementById("avatar").value = cfg.avatar;
+}
+async function saveConfig() {
+  const body = {
+    personality: document.getElementById("personality").value,
+    voice: document.getElementById("voice").value,
+    avatar: document.getElementById("avatar").value
+  };
+  await fetch("/config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  alert("Saved!");
+}
+loadConfig();
+</script>
 </body>
 </html>
