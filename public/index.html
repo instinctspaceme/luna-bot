@@ -3,197 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <title>Luna Web Chat</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --bg: #0e0e12;
-      --card: #191923;
-      --accent: #7c5cff;
-      --text: #ffffff;
-      --muted: #a6a6b3;
-      --user: #2a2a36;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      display: grid; place-items: center; min-height: 100vh; padding: 16px;
-    }
-    .wrap { width: 100%; max-width: 760px; }
-    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-    .header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
-    .header .meta { line-height: 1.2; }
-    .header .meta h1 { margin: 0; font-size: 20px; }
-    .header .meta .sub { color: var(--muted); font-size: 13px; }
-
-    .card { background: var(--card); border-radius: 16px; padding: 12px; display: grid; grid-template-rows: 1fr auto; height: 70vh; }
-    .chat { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 10px; }
-    .bubble {
-      max-width: 75%; padding: 10px 12px; border-radius: 14px; line-height: 1.35; white-space: pre-wrap;
-      box-shadow: 0 2px 10px rgba(0,0,0,.25);
-      animation: pop .12s ease-out;
-    }
-    .bubble.user { background: var(--user); margin-left: auto; border-bottom-right-radius: 4px; }
-    .bubble.bot { background: #161622; border-bottom-left-radius: 4px; }
-    .typing { display: inline-flex; gap: 4px; align-items: center; }
-    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.1s infinite; }
-    .dot:nth-child(2) { animation-delay: .2s; }
-    .dot:nth-child(3) { animation-delay: .4s; }
-
-    .input { display: flex; gap: 8px; padding: 8px; }
-    .input input {
-      flex: 1; padding: 12px; border-radius: 12px; border: 1px solid #303042; background: #12121a; color: var(--text);
-    }
-    .input button {
-      padding: 12px 16px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font-weight: 600;
-    }
-    .toolbar { display:flex; gap:8px; align-items:center; margin: 8px 0; color: var(--muted); font-size: 13px; }
-    select, .toggle { background:#12121a; color:var(--text); border:1px solid #303042; border-radius:8px; padding:6px 8px; }
-
-    @keyframes blink { 50% { opacity: .35; } }
-    @keyframes pop { from { transform: scale(.97); opacity:.8; } to { transform: scale(1); opacity:1; } }
+    body { background:#0e0e12; color:#fff; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; padding:16px; }
+    .chat { max-width:600px; width:100%; background:#191923; border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:8px; height:70vh; overflow-y:auto; }
+    .bubble { padding:10px; border-radius:12px; max-width:70%; }
+    .user { align-self:flex-end; background:#2a2a36; }
+    .bot { align-self:flex-start; background:#252530; }
+    .input { margin-top:12px; display:flex; gap:8px; width:100%; max-width:600px; }
+    .input input { flex:1; padding:10px; border-radius:8px; border:none; }
+    .input button { padding:10px 14px; border:none; border-radius:8px; background:#7c5cff; color:#fff; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="header">
-      <img id="avatar" alt="Luna" src="luna1.png" />
-      <div class="meta">
-        <h1>🌙 Luna</h1>
-        <div class="sub">real-time voice + expressions</div>
-      </div>
-    </div>
-
-    <div class="toolbar">
-      <label>Voice:&nbsp;
-        <select id="voiceSelect"></select>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="ttsToggle" checked /> Speak replies
-      </label>
-    </div>
-
-    <div class="card">
-      <div id="chat" class="chat"></div>
-      <div class="input">
-        <input id="msg" placeholder="Type a message…" />
-        <button id="sendBtn">Send</button>
-      </div>
-    </div>
+  <h1>🌙 Luna</h1>
+  <img id="avatar" src="luna1.png" width="80" style="border-radius:50%; margin-bottom:10px;" />
+  <div class="chat" id="chat"></div>
+  <div class="input">
+    <input id="msg" placeholder="Type message..." />
+    <button id="sendBtn">Send</button>
   </div>
 
-  <script>
-    let cfg = {
-      globalAvatar: "luna1.png",
-      expressions: { happy:"luna_happy.png", sad:"luna_sad.png", neutral:"luna1.png" },
-      voice: ""
-    };
+<script>
+const chat = document.getElementById("chat");
+const avatar = document.getElementById("avatar");
+const input = document.getElementById("msg");
+const sendBtn = document.getElementById("sendBtn");
 
-    const chat = document.getElementById("chat");
-    const avatar = document.getElementById("avatar");
-    const input = document.getElementById("msg");
-    const sendBtn = document.getElementById("sendBtn");
-    const voiceSelect = document.getElementById("voiceSelect");
-    const ttsToggle = document.getElementById("ttsToggle");
+function bubble(text, who="bot") {
+  const div = document.createElement("div");
+  div.className = `bubble ${who}`;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
 
-    /* ----------- helpers ----------- */
-    function scrollBottom(){ chat.scrollTop = chat.scrollHeight; }
-    function bubble(text, who="bot"){
-      const div = document.createElement("div");
-      div.className = `bubble ${who}`;
-      div.textContent = text;
-      chat.appendChild(div);
-      scrollBottom();
-      return div;
-    }
-    function typingBubble(){
-      const div = document.createElement("div");
-      div.className = "bubble bot";
-      div.innerHTML = `<span class="typing">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </span>`;
-      chat.appendChild(div);
-      scrollBottom();
-      return div;
-    }
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  bubble(text, "user");
+  input.value = "";
 
-    /* ----------- TTS ----------- */
-    let voices = [];
-    function loadVoices(){
-      voices = speechSynthesis.getVoices();
-      voiceSelect.innerHTML = "";
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = "(system default)";
-      voiceSelect.appendChild(placeholder);
+  const typing = document.createElement("div");
+  typing.className = "bubble bot";
+  typing.textContent = "…";
+  chat.appendChild(typing);
 
-      voices.forEach(v=>{
-        const o = document.createElement("option");
-        o.value = v.name;
-        o.textContent = `${v.name} (${v.lang})`;
-        voiceSelect.appendChild(o);
-      });
+  try {
+    const r = await fetch("/api/chat", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    const data = await r.json();
+    typing.remove();
+    bubble(data.reply, "bot");
 
-      // preselect from config if present
-      if (cfg.voice){
-        const found = [...voiceSelect.options].find(o=>o.value===cfg.voice);
-        if (found) voiceSelect.value = cfg.voice;
-      }
-    }
-    speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
+    if (data.expression) avatar.src = data.expression;
 
-    function speak(text){
-      if (!ttsToggle.checked) return;
-      const u = new SpeechSynthesisUtterance(text);
-      const chosen = voices.find(v=>v.name === voiceSelect.value);
-      if (chosen) u.voice = chosen;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(u);
-    }
+    // Play audio
+    const v = await fetch("/api/voice", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ text: data.reply })
+    });
+    const blob = await v.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play();
+  } catch(e) {
+    typing.remove();
+    bubble("Error: "+e.message, "bot");
+  }
+}
 
-    /* ----------- config + ui ----------- */
-    async function loadConfig(){
-      try{
-        const res = await fetch("/config");
-        const c = await res.json();
-        cfg = { ...cfg, ...c };
-      }catch(e){}
-      avatar.src = cfg.globalAvatar || "luna1.png";
-    }
-
-    async function send(){
-      const text = input.value.trim();
-      if (!text) return;
-      bubble(text, "user");
-      input.value = "";
-      const typing = typingBubble();
-
-      try{
-        const r = await fetch("/api/chat", {
-          method:"POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ message: text })
-        });
-        const data = await r.json();
-
-        // swap avatar to suggested expression if file exists
-        const exprSrc = data.expression || cfg.expressions?.neutral || cfg.globalAvatar;
-        if (exprSrc) avatar.src = exprSrc;
-
-        typing.remove();
-        bubble(data.reply || "…", "bot");
-        speak(data.reply || "");
-      }catch(e){
-        typing.remove();
-        bubble("Oops, something went wrong.", "bot");
-      }
-    }
-
-    sendBtn.onclick = send;
-    input.addEventListener("keydown", (e)=>{ if(e.key==="Enter") send(); });
-
-    loadConfig();
-  </script>
+sendBtn.onclick = send;
+input.addEventListener("keydown", e => { if (e.key==="Enter") send(); });
+</script>
 </body>
 </html>
