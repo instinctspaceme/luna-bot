@@ -1,7 +1,5 @@
 {
-  "personality": "friendly",
-  "voice": "alloy",
-  "background": "default",
-  "avatar": "neo", 
-  "rotation": "none"
+  "globalAvatar": "luna1.png",
+  "background": "default.jpg",
+  "voice": "alloy"
 }
