@@ -1,67 +1,130 @@
 import express from "express";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { Telegraf } from "telegraf";
-import fetch from "node-fetch";
 import bodyParser from "body-parser";
+import path from "path";
+import fs from "fs";
+import fetch from "node-fetch";
+import { fileURLToPath } from "url";
+import OpenAI from "openai";
+import { Telegraf } from "telegraf";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(bodyParser.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
-app.use(bodyParser.json());
 
 const configPath = path.join(__dirname, "config.json");
-let config = { globalAvatar: "luna1.png", background: "default.jpg", voice: "alloy" };
+let config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 
-// load config
-if (fs.existsSync(configPath)) {
-  config = JSON.parse(fs.readFileSync(configPath));
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+function quickSentiment(text = "") {
+  const pos = ["great","good","awesome","love","happy","yes","cool","thanks","nice","amazing","wonderful","fantastic","perfect"];
+  const neg = ["bad","sad","angry","hate","no","terrible","awful","worse","pain","annoy","sorry","ugh"];
+  let score = 0;
+  const t = text.toLowerCase();
+  pos.forEach(w => (t.includes(w) ? (score += 1) : null));
+  neg.forEach(w => (t.includes(w) ? (score -= 1) : null));
+  return Math.max(-2, Math.min(2, score));
 }
 
-// save config endpoint
-app.post("/config", (req, res) => {
-  config = { ...config, ...req.body };
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  res.json({ success: true });
-});
-
-// get config
-app.get("/config", (req, res) => {
-  res.json(config);
-});
-
-// list avatars (from avatars/ or public/)
-app.get("/avatars", (req, res) => {
-  const avatarsDir = path.join(__dirname, "public/avatars");
-  let files = [];
+// =============================
+// 📌 CHAT ENDPOINT (Web UI)
+// =============================
+app.post("/chat", async (req, res) => {
   try {
-    if (fs.existsSync(avatarsDir)) {
-      files = fs.readdirSync(avatarsDir).filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f)).map(f => `avatars/${f}`);
-    }
-    // also check public/
-    const publicFiles = fs.readdirSync(path.join(__dirname, "public"))
-      .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
-      .map(f => f);
-    files = [...files, ...publicFiles];
+    const { message, history = [], voice } = req.body;
+
+    const messages = [
+      { role: "system", content: `You are Luna, a ${config.personality} AI assistant.` },
+      ...history.slice(-12),
+      { role: "user", content: message }
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages
+    });
+
+    const reply = completion.choices[0].message.content || "…";
+    const sentiment = quickSentiment(`${message}\n${reply}`);
+
+    const tts = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: voice || config.voice || "alloy",
+      input: reply
+    });
+    const audioBuffer = Buffer.from(await tts.arrayBuffer());
+
+    res.json({
+      reply,
+      audio: audioBuffer.toString("base64"),
+      sentiment
+    });
   } catch (err) {
-    console.error("Avatar scan failed", err);
+    console.error("API /chat error:", err);
+    res.status(500).json({ reply: "⚠️ Error: " + err.message });
   }
-  res.json(files);
 });
 
-// Telegram bot setup
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
-
-bot.start((ctx) => ctx.reply("Hi! I’m Luna 🌙"));
-bot.on("text", async (ctx) => {
-  ctx.reply(`You said: ${ctx.message.text}`);
+// =============================
+// 📌 CONFIG ENDPOINTS
+// =============================
+app.post("/config", (req, res) => {
+  const { personality, voice, background, avatar } = req.body;
+  if (personality) config.personality = personality;
+  if (voice) config.voice = voice;
+  if (background) config.background = background;
+  if (avatar) config.avatar = avatar;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  res.json({ success: true, config });
 });
 
-app.use(bot.webhookCallback("/telegram"));
-bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/telegram`);
+app.get("/config", (req, res) => res.json(config));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on ${PORT}`));
+// =============================
+// 📌 TELEGRAM BOT
+// =============================
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+  bot.start((ctx) => ctx.reply("👋 Hi! I am Luna. Send me text or a voice note!"));
+
+  bot.on("text", async (ctx) => {
+    try {
+      const userText = ctx.message.text;
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: `You are Luna, a ${config.personality} AI assistant.` },
+          { role: "user", content: userText }
+        ]
+      });
+      const reply = completion.choices[0].message.content || "…";
+      await ctx.reply(reply);
+
+      const ttsResponse = await openai.audio.speech.create({
+        model: "gpt-4o-mini-tts",
+        voice: config.voice || "alloy",
+        input: reply
+      });
+      const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+      await ctx.replyWithVoice({ source: audioBuffer });
+    } catch (err) {
+      ctx.reply("⚠️ Error: " + err.message);
+    }
+  });
+
+  bot.launch();
+  console.log("✅ Telegram bot running");
+}
+
+// =============================
+// 📌 START SERVER
+// =============================
+app.listen(PORT, () => {
+  console.log(`🚀 Luna running on http://localhost:${PORT}`);
+});
