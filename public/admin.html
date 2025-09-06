@@ -1,96 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Luna Admin Panel</title>
+  <meta charset="UTF-8" />
+  <title>Luna Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#1e1e1e;color:#eee;margin:0;padding:20px}
-    .card{background:#2c2c2c;border-radius:10px;padding:16px;max-width:720px}
-    input,select,button{padding:10px;border-radius:8px;border:1px solid #444;background:#1f1f1f;color:#eee}
-    button{background:#5c5cff;border:none;cursor:pointer}
-    label{display:block;margin-top:10px}
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+    h1 { margin-top: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 10px; text-align: center; }
+    .card img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; display:block; margin: 0 auto 8px; border:2px solid transparent; }
+    .card.selected img { border-color: #7c5cff; }
+    .row { display:flex; gap:10px; align-items:center; margin:10px 0; }
+    select, button, input { padding:8px; border-radius:8px; border:1px solid #ccc; }
+    .section { margin: 18px 0; }
   </style>
 </head>
 <body>
-  <h2>⚙️ Luna Admin Panel</h2>
-  <div class="card">
-    <label>Personality
-      <input id="personality" placeholder="friendly, witty, serious…" />
-    </label>
+  <h1>🌙 Luna Admin</h1>
 
-    <label>Default Voice
-      <select id="voice">
-        <option value="alloy">Alloy</option>
-        <option value="verse">Verse</option>
-        <option value="soft">Soft</option>
-        <option value="energetic">Energetic</option>
-        <option value="robotic">Robotic</option>
-      </select>
-    </label>
+  <div class="section">
+    <h2>Global Avatar</h2>
+    <div id="avatarGrid" class="grid"></div>
+  </div>
 
-    <label>Global Background
-      <select id="background">
-        <option value="default">Default</option>
-        <option value="space">Space</option>
-        <option value="forest">Forest</option>
-        <option value="neon">Neon</option>
-      </select>
-    </label>
-
-    <label>Default Avatar Skin
-      <select id="avatar">
-        <option value="neo">Neo</option>
-        <option value="pearl">Pearl</option>
-        <option value="onyx">Onyx</option>
-      </select>
-    </label>
-
-    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-      <button onclick="saveConfig()">💾 Save</button>
-      <button onclick="testVoice()">🔊 Test Voice</button>
-      <span id="status" style="margin-left:8px"></span>
+  <div class="section">
+    <h2>Expressions mapping</h2>
+    <div class="row">
+      <label>Neutral:</label>
+      <select id="neutral"></select>
+    </div>
+    <div class="row">
+      <label>Happy:</label>
+      <select id="happy"></select>
+    </div>
+    <div class="row">
+      <label>Sad:</label>
+      <select id="sad"></select>
     </div>
   </div>
 
+  <div class="section">
+    <h2>Voice (browser TTS)</h2>
+    <div class="row">
+      <input id="voice" placeholder="(optional) voice name exactly as in browser" />
+    </div>
+  </div>
+
+  <button id="save">Save Settings</button>
+
   <script>
-    async function saveConfig(){
+    let files = [];
+    let selectedGlobal = "";
+    const avatarGrid = document.getElementById("avatarGrid");
+    const selNeutral = document.getElementById("neutral");
+    const selHappy = document.getElementById("happy");
+    const selSad = document.getElementById("sad");
+    const voiceInput = document.getElementById("voice");
+
+    async function loadAll(){
+      const [cfgRes, avRes] = await Promise.all([fetch("/config"), fetch("/avatars")]);
+      const cfg = await cfgRes.json();
+      files = await avRes.json();
+
+      // grid
+      avatarGrid.innerHTML = "";
+      files.forEach(f=>{
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `<img src="${f}" alt=""><div>${f}</div>`;
+        card.onclick = ()=>{
+          document.querySelectorAll(".card").forEach(c=>c.classList.remove("selected"));
+          card.classList.add("selected");
+          selectedGlobal = f;
+        };
+        avatarGrid.appendChild(card);
+        if (f === cfg.globalAvatar) {
+          card.classList.add("selected");
+          selectedGlobal = f;
+        }
+      });
+
+      // selects
+      [selNeutral, selHappy, selSad].forEach(sel=>{
+        sel.innerHTML = "";
+        files.forEach(f=>{
+          const o = document.createElement("option");
+          o.value = f; o.textContent = f;
+          sel.appendChild(o);
+        });
+      });
+
+      selNeutral.value = cfg.expressions?.neutral || cfg.globalAvatar;
+      selHappy.value = cfg.expressions?.happy || cfg.globalAvatar;
+      selSad.value   = cfg.expressions?.sad   || cfg.globalAvatar;
+
+      voiceInput.value = cfg.voice || "";
+    }
+
+    document.getElementById("save").onclick = async ()=>{
+      if (!selectedGlobal) {
+        // if none clicked, keep current one by grabbing current selected
+        const selectedCard = document.querySelector(".card.selected img");
+        selectedGlobal = selectedCard ? selectedCard.getAttribute("src") : files[0] || "luna1.png";
+      }
       const payload = {
-        personality: document.getElementById("personality").value,
-        voice: document.getElementById("voice").value,
-        background: document.getElementById("background").value,
-        avatar: document.getElementById("avatar").value
+        globalAvatar: selectedGlobal,
+        voice: voiceInput.value || "",
+        expressions: {
+          neutral: selNeutral.value || selectedGlobal,
+          happy: selHappy.value || selectedGlobal,
+          sad: selSad.value || selectedGlobal
+        }
       };
-      const res = await fetch("/config", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+      await fetch("/config", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      document.getElementById("status").textContent = "Saved ✔ " + new Date().toLocaleTimeString();
-    }
+      alert("Saved!");
+    };
 
-    async function testVoice(){
-      const voice = document.getElementById("voice").value;
-      const res = await fetch("/test-voice", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ voice })
-      });
-      const data = await res.json();
-      if (data.audio) {
-        new Audio("data:audio/mpeg;base64," + data.audio).play();
-      } else {
-        alert("Error: " + (data.error || "unknown"));
-      }
-    }
-
-    // load current
-    fetch("/config").then(r=>r.json()).then(cfg=>{
-      document.getElementById("personality").value = cfg.personality || "";
-      document.getElementById("voice").value = cfg.voice || "alloy";
-      document.getElementById("background").value = cfg.background || "default";
-      document.getElementById("avatar").value = cfg.avatar || "neo";
-    });
+    loadAll();
   </script>
 </body>
 </html>
