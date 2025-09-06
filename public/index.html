@@ -1,191 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Luna Web Chat</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { font-family: Arial, sans-serif; background: #1e1e1e; color: #eee; transition: background 0.5s; }
+    #chat { max-width: 600px; margin: 20px auto; padding: 10px; background: #2c2c2c; border-radius: 8px; }
+    .message { margin: 5px 0; padding: 8px; border-radius: 5px; }
+    .user { background: #3a3a8a; text-align: right; }
+    .bot { background: #444; text-align: left; display: flex; justify-content: space-between; align-items: center; }
+    #inputArea { display: flex; margin-top: 10px; }
+    #userInput { flex: 1; padding: 8px; }
+    button { padding: 8px; background: #5c5cff; border: none; color: white; cursor: pointer; }
+    .playBtn { margin-left: 10px; background: #4CAF50; border: none; padding: 5px; border-radius: 4px; cursor: pointer; color: white; }
+    #settings { margin: 15px auto; max-width: 600px; padding: 10px; background: #2c2c2c; border-radius: 8px; }
+    label { display: block; margin-top: 8px; }
+    #micBtn { margin-left: 8px; background: red; }
+  </style>
 </head>
 <body>
-  <h1>🌙 Luna Web Chat</h1>
-
-  <div id="top">
-    <label><input type="checkbox" id="ttsToggle" checked /> Play voice replies</label>
-    <img id="activeAvatar" class="avatar" src="" alt="avatar"/>
-  </div>
-
   <div id="chat"></div>
 
-  <div id="controls">
-    <input id="msg" placeholder="Type a message..." />
-    <button id="sendBtn">Send</button>
-    <button id="recBtn">🎙️ Hold to speak (quick)</button>
+  <div id="inputArea">
+    <input id="userInput" type="text" placeholder="Type or speak..."/>
+    <button onclick="sendMessage()">Send</button>
+    <button id="micBtn" onclick="toggleMic()">🎤</button>
   </div>
 
-  <div class="card">
-    <h3>🔊 Live Call (Walkie-Talkie)</h3>
-    <p><b>Start Call</b> → hold <b>SPACE</b> to talk → release to send. Watch <i>live partial</i> transcripts.</p>
-    <button id="callBtn">Start Call</button>
-    <span id="callStatus"></span>
-    <div id="partials" class="partials"></div>
+  <div id="settings">
+    <h3>Personal Settings</h3>
+    <label>Background:
+      <select id="bgSelect" onchange="saveUserSettings()">
+        <option value="default">Default</option>
+        <option value="space">Space</option>
+        <option value="forest">Forest</option>
+        <option value="neon">Neon</option>
+      </select>
+    </label>
+    <label>Voice Pitch: <input id="pitch" type="range" min="0.5" max="2" step="0.1" value="1" onchange="saveUserSettings()"> </label>
+    <label>Voice Rate: <input id="rate" type="range" min="0.5" max="2" step="0.1" value="1" onchange="saveUserSettings()"> </label>
   </div>
-
-  <audio id="player" controls style="display:none"></audio>
 
   <script>
-    const SID_KEY = "luna_sid";
-    let sid = localStorage.getItem(SID_KEY);
-    if (!sid) { sid = Math.random().toString(36).slice(2); localStorage.setItem(SID_KEY, sid); }
+    let recognition;
+    let isListening = false;
 
-    const chat = document.getElementById("chat");
-    const msg = document.getElementById("msg");
-    const sendBtn = document.getElementById("sendBtn");
-    const recBtn = document.getElementById("recBtn");
-    const player = document.getElementById("player");
-    const ttsToggle = document.getElementById("ttsToggle");
-    const activeAvatarEl = document.getElementById("activeAvatar");
-    const callBtn = document.getElementById("callBtn");
-    const callStatus = document.getElementById("callStatus");
-    const partials = document.getElementById("partials");
+    if ("webkitSpeechRecognition" in window) {
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
 
-    let ws = null;
-    let callStream = null;
-    let callRecorder = null;
+      recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("userInput").value = transcript;
+        sendMessage();
+      };
 
-    function addLine(html) {
-      const div = document.createElement("div");
-      div.className = "msg-line";
-      div.innerHTML = html;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      recognition.onerror = function(event) {
+        console.error("Mic error:", event.error);
+      };
+
+      recognition.onend = function() {
+        document.getElementById("micBtn").style.background = "red";
+        isListening = false;
+      };
     }
 
-    async function loadSettings() {
-      const s = await (await fetch("/api/settings")).json();
-      activeAvatarEl.src = "/avatars/" + s.activeAvatar + "?ts=" + Date.now();
-    }
-    loadSettings();
-
-    async function sendMessage() {
-      const text = msg.value.trim();
-      if (!text) return;
-      msg.value = "";
-      addLine(`<div class="user"><b>You:</b> ${text}</div>`);
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, tts: ttsToggle.checked, sid })
-      });
-      const data = await res.json();
-      addLine(`<div class="luna"><img class="avatar" src="/avatars/${data.activeAvatar}"/> <b>Luna:</b> ${data.reply}</div>`);
-      if (data.audio && ttsToggle.checked) {
-        player.src = data.audio + "?ts=" + Date.now();
-        player.play();
+    function toggleMic() {
+      if (!recognition) {
+        alert("❌ Speech recognition not supported in this browser.");
+        return;
       }
-      loadSettings();
-    }
-
-    sendBtn.onclick = sendMessage;
-    msg.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
-
-    // Quick hold-to-talk using browser SR (if available)
-    async function startQuickRecord() {
-      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        rec.lang = "en-US";
-        rec.interimResults = false;
-        rec.onresult = (ev) => {
-          msg.value = ev.results[0][0].transcript;
-          sendMessage();
-        };
-        rec.start();
+      if (!isListening) {
+        recognition.start();
+        document.getElementById("micBtn").style.background = "green";
+        isListening = true;
       } else {
-        addLine(`<div class="sys">⚠️ Browser speech recognition unavailable. Use Live Call below.</div>`);
+        recognition.stop();
+        document.getElementById("micBtn").style.background = "red";
+        isListening = false;
       }
     }
-    function stopQuickRecord() {}
 
-    recBtn.addEventListener("mousedown", startQuickRecord);
-    recBtn.addEventListener("touchstart", startQuickRecord);
-    window.addEventListener("mouseup", stopQuickRecord);
-    window.addEventListener("touchend", stopQuickRecord);
-
-    // ===== Live Call (WebSocket) with partials =====
-    async function startCall() {
-      if (ws && ws.readyState === 1) return;
-      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/call?sid=" + sid);
-
-      ws.onopen = async () => {
-        callStatus.textContent = "Connected — hold SPACE to talk";
-        partials.textContent = "";
-        callStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        callRecorder = new MediaRecorder(callStream, { mimeType: "audio/webm" });
-
-        callRecorder.ondataavailable = (e) => {
-          if (ws && ws.readyState === 1) ws.send(e.data);
-        };
-
-        let pressing = false;
-        const down = (ev) => {
-          if (ev.code === "Space" && !pressing) {
-            pressing = true;
-            callRecorder.start(250);
-          }
-        };
-        const up = (ev) => {
-          if (ev.code === "Space" && pressing) {
-            pressing = false;
-            callRecorder.stop();
-            ws.send(JSON.stringify({ type: "segment_end" }));
-          }
-        };
-        window.addEventListener("keydown", down);
-        window.addEventListener("keyup", up);
-        ws._cleanupKeys = () => {
-          window.removeEventListener("keydown", down);
-          window.removeEventListener("keyup", up);
-        };
-      };
-
-      ws.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data);
-          if (data.type === "partial") {
-            partials.textContent = "… " + data.transcript;
-          } else if (data.type === "result") {
-            if (data.transcript) addLine(`<div class="user"><b>You (call):</b> ${data.transcript}</div>`);
-            addLine(`<div class="luna"><img class="avatar" src="${activeAvatarEl.src}"/> <b>Luna (call):</b> ${data.reply}</div>`);
-            partials.textContent = "";
-            if (data.audio) new Audio(data.audio + "?ts=" + Date.now()).play();
-          } else if (data.type === "error") {
-            addLine(`<div class="sys">⚠️ Call error: ${data.error}</div>`);
-          }
-        } catch {}
-      };
-
-      ws.onclose = () => {
-        callStatus.textContent = "Disconnected";
-        partials.textContent = "";
-        if (ws && ws._cleanupKeys) ws._cleanupKeys();
-        if (callRecorder && callRecorder.state !== "inactive") callRecorder.stop();
-        if (callStream) callStream.getTracks().forEach(t => t.stop());
-        ws = null;
-      };
-    }
-
-    function endCall() {
-      if (ws) ws.close();
-      callStatus.textContent = "Disconnected";
-    }
-
-    callBtn.onclick = () => {
-      if (!ws || ws.readyState !== 1) {
-        callBtn.textContent = "End Call";
-        startCall();
-      } else {
-        callBtn.textContent = "Start Call";
-        endCall();
-      }
-    };
-  </script>
-</body>
-</html>
+    function applyBackground(bg) {
+      if (bg === "space") document.body.style.background = "url('https://picsum.photos/seed/space/1200/800') no-repeat center/cover";
+      else if (bg === "forest") document.body.style.background = "url('https
