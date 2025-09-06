@@ -85,4 +85,71 @@
 
     function applyBackground(bg) {
       if (bg === "space") document.body.style.background = "url('https://picsum.photos/seed/space/1200/800') no-repeat center/cover";
-      else if (bg === "forest") document.body.style.background = "url('https
+      else if (bg === "forest") document.body.style.background = "url('https://picsum.photos/seed/forest/1200/800') no-repeat center/cover";
+      else if (bg === "neon") document.body.style.background = "linear-gradient(135deg, #ff00ff, #00ffff)";
+      else document.body.style.background = "#1e1e1e";
+    }
+
+    function saveUserSettings() {
+      const bg = document.getElementById("bgSelect").value;
+      const pitch = document.getElementById("pitch").value;
+      const rate = document.getElementById("rate").value;
+      localStorage.setItem("userSettings", JSON.stringify({ bg, pitch, rate }));
+      applyBackground(bg);
+    }
+
+    function loadUserSettings() {
+      const saved = localStorage.getItem("userSettings");
+      if (saved) {
+        const { bg, pitch, rate } = JSON.parse(saved);
+        document.getElementById("bgSelect").value = bg;
+        document.getElementById("pitch").value = pitch;
+        document.getElementById("rate").value = rate;
+        applyBackground(bg);
+      }
+    }
+
+    function addMessage(sender, text, audioBase64 = null, pitch = 1, rate = 1) {
+      const chat = document.getElementById("chat");
+      const msg = document.createElement("div");
+      msg.classList.add("message", sender);
+      if (sender === "bot" && audioBase64) {
+        msg.innerHTML = `<span>${text}</span>
+          <button class="playBtn" onclick="playAudio('${audioBase64}', ${pitch}, ${rate})">🔊</button>`;
+      } else msg.innerText = text;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function playAudio(base64, pitch = 1, rate = 1) {
+      const audio = new Audio("data:audio/mpeg;base64," + base64);
+      audio.playbackRate = rate;
+      audio.play();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("userInput");
+      const message = input.value.trim();
+      if (!message) return;
+      addMessage("user", message);
+      input.value = "";
+
+      const settings = JSON.parse(localStorage.getItem("userSettings")) || { pitch: 1, rate: 1 };
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, pitch: settings.pitch, rate: settings.rate })
+        });
+        const data = await res.json();
+        addMessage("bot", data.reply, data.audio, settings.pitch, settings.rate);
+      } catch (err) {
+        addMessage("bot", "⚠️ Error: " + err.message);
+      }
+    }
+
+    loadUserSettings();
+  </script>
+</body>
+</html>
