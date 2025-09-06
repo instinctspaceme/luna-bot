@@ -18,51 +18,24 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 
 /* -------- CONFIG -------- */
-const configPath = path.join(__dirname, "config.json");
 let config = {
-  globalAvatar: "luna1.png",
-  background: "default.jpg",
-  voice: "alloy", // openai tts voice
   expressions: {
     happy: "luna_happy.png",
     sad: "luna_sad.png",
     neutral: "luna1.png"
-  }
+  },
+  voice: "alloy"
 };
-if (fs.existsSync(configPath)) {
-  try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch {}
-}
-const saveConfig = () => fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 
-/* -------- HELPERS -------- */
-function listImageFiles(dirAbs) {
-  if (!fs.existsSync(dirAbs)) return [];
-  return fs.readdirSync(dirAbs).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f));
-}
-
-/* -------- ROUTES -------- */
-app.get("/config", (_, res) => res.json(config));
-app.post("/config", (req, res) => {
-  config = { ...config, ...req.body };
-  saveConfig();
-  res.json({ success: true, config });
-});
-
-app.get("/avatars", (_, res) => {
-  const avatarsDir = path.join(__dirname, "public", "avatars");
-  const publicDir = path.join(__dirname, "public");
-  const all = [...listImageFiles(avatarsDir).map(f => `avatars/${f}`), ...listImageFiles(publicDir)];
-  res.json([...new Set(all)]);
-});
-
+/* -------- CHAT ROUTE -------- */
 app.post("/api/chat", async (req, res) => {
   const { message = "" } = req.body || {};
   const result = sentiment.analyze(message);
   let expression = config.expressions.neutral;
+
   if (result.score >= 2) expression = config.expressions.happy;
   else if (result.score <= -2) expression = config.expressions.sad;
 
-  // Basic reply stub
   const reply =
     result.score >= 2 ? "That makes me happy! 🌸"
     : result.score <= -2 ? "I feel your sadness 💜"
@@ -79,7 +52,7 @@ app.post("/api/voice", async (req, res) => {
   try {
     const mp3 = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice: config.voice || "alloy",
+      voice: config.voice,
       input: text
     });
 
@@ -94,7 +67,7 @@ app.post("/api/voice", async (req, res) => {
 
 /* -------- TELEGRAM -------- */
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || "";
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || "";
 
 if (TELEGRAM_TOKEN) {
   const bot = new Telegraf(TELEGRAM_TOKEN);
