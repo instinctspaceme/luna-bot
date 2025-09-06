@@ -1,147 +1,120 @@
-// Luna Bot — rollback baseline (no TTS)
-// Web UI + Telegram (webhook) + avatar expressions + simple admin.
+// Luna "last-night" baseline:
+// - Web UI
+// - OpenAI TTS voice (realistic)
+// - Telegram (POLLING by default; WEBHOOK optional via env)
+// - Simple sentiment → avatar expression switch
+// No admin/config files.
 
 import express from "express";
-import fs from "fs";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import bodyParser from "body-parser";
 import Sentiment from "sentiment";
 import { Telegraf } from "telegraf";
+import OpenAI from "openai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const sentiment = new Sentiment();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 
-/* -------------------- CONFIG -------------------- */
-const configPath = path.join(__dirname, "config.json");
-let config = {
-  globalAvatar: "luna1.png",
-  background: "default.jpg",
-  expressions: {
-    happy: "luna_happy.png",
-    sad: "luna_sad.png",
-    neutral: "luna1.png"
-  }
+// ---- Simple in-memory config matching last-night filenames
+const EXPRESSIONS = {
+  neutral: "luna1.png",
+  happy: "luna_happy.png",
+  sad: "luna_sad.png",
 };
-if (fs.existsSync(configPath)) {
-  try {
-    config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  } catch (e) {
-    console.error("Failed to parse config.json; using defaults:", e.message);
-  }
-}
-const saveConfig = () =>
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+const DEFAULT_VOICE = "alloy"; // OpenAI TTS voice
 
-/* -------------------- HELPERS -------------------- */
-function listImageFiles(absDir) {
-  if (!fs.existsSync(absDir)) return [];
-  try {
-    return fs
-      .readdirSync(absDir, { withFileTypes: true })
-      .filter((d) => d.isFile() && /\.(png|jpe?g|gif|webp)$/i.test(d.name))
-      .map((d) => d.name);
-  } catch {
-    return [];
-  }
+// Utility: verify file exists in /public; if not, fall back to neutral
+function expressionPath(name) {
+  const abs = path.join(__dirname, "public", name);
+  return fs.existsSync(abs) ? name : EXPRESSIONS.neutral;
 }
 
-/* -------------------- ROUTES -------------------- */
-app.get("/healthz", (_, res) => res.send("ok"));
-
-app.get("/config", (_, res) => res.json(config));
-
-app.post("/config", (req, res) => {
-  try {
-    config = { ...config, ...req.body };
-    // protect expressions shape
-    if (req.body.expressions) {
-      config.expressions = {
-        ...config.expressions,
-        ...req.body.expressions,
-      };
-    }
-    saveConfig();
-    res.json({ success: true, config });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-/* List avatars from /public/avatars and /public (mobile friendly) */
-app.get("/avatars", (_, res) => {
-  const avatarsDir = path.join(__dirname, "public", "avatars");
-  const publicDir = path.join(__dirname, "public");
-
-  const fromAvatars = listImageFiles(avatarsDir).map((f) => `avatars/${f}`);
-  const fromPublic = listImageFiles(publicDir);
-
-  const unique = Array.from(new Set([...fromAvatars, ...fromPublic]));
-  res.json(unique);
-});
-
-/* Basic chat route: returns reply + suggested expression based on sentiment */
-app.post("/api/chat", (req, res) => {
+// ---- Chat: canned reply + expression from sentiment
+app.post("/api/chat", async (req, res) => {
   const { message = "" } = req.body || {};
-  const result = sentiment.analyze(message);
+  const s = sentiment.analyze(message);
 
-  let expression = config.expressions.neutral;
-  if (result.score >= 2) expression = config.expressions.happy;
-  else if (result.score <= -2) expression = config.expressions.sad;
+  let expression = EXPRESSIONS.neutral;
+  if (s.score >= 2) expression = EXPRESSIONS.happy;
+  else if (s.score <= -2) expression = EXPRESSIONS.sad;
 
-  // Simple canned reply (you can replace with an LLM later)
   const reply =
-    result.score >= 2
-      ? "I love your energy! 😊"
-      : result.score <= -2
+    s.score >= 2
+      ? "Love that energy! 😊"
+      : s.score <= -2
       ? "I’m here with you. 💜"
-      : "I’m listening.";
+      : "Got it.";
 
-  res.json({ reply, expression });
+  res.json({ reply, expression: expressionPath(expression) });
 });
 
-/* -------------------- TELEGRAM (WEBHOOK) -------------------- */
+// ---- Voice: OpenAI TTS → mp3 buffer
+app.post("/api/voice", async (req, res) => {
+  const { text } = req.body || {};
+  if (!text) return res.status(400).json({ error: "No text" });
+
+  try {
+    const mp3 = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: DEFAULT_VOICE,
+      input: text,
+    });
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.send(buffer);
+  } catch (e) {
+    console.error("TTS error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ---- Telegram: POLLING by default (set TELEGRAM_MODE=webhook to use webhook)
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const PUBLIC_URL =
-  process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || "";
+const TELEGRAM_MODE = (process.env.TELEGRAM_MODE || "polling").toLowerCase(); // "polling" | "webhook"
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || "";
 
 if (TELEGRAM_TOKEN) {
   const bot = new Telegraf(TELEGRAM_TOKEN);
 
-  bot.start((ctx) => ctx.reply("Hi! I’m Luna 🌙 Send me a message!"));
+  bot.start((ctx) => ctx.reply("Hi! I’m Luna 🌙"));
   bot.on("text", async (ctx) => {
     const text = ctx.message.text || "";
-    const result = sentiment.analyze(text);
+    const s = sentiment.analyze(text);
     let prefix = "Luna";
-    if (result.score >= 2) prefix = "Luna (happy)";
-    else if (result.score <= -2) prefix = "Luna (concerned)";
+    if (s.score >= 2) prefix = "Luna (happy)";
+    else if (s.score <= -2) prefix = "Luna (concerned)";
     await ctx.reply(`${prefix}: ${text}`);
   });
 
-  // Webhook mode (prevents 409 conflicts)
-  app.use(bot.webhookCallback("/telegram"));
-  if (PUBLIC_URL) {
+  if (TELEGRAM_MODE === "webhook" && PUBLIC_URL) {
+    app.use(bot.webhookCallback("/telegram"));
     bot.telegram
       .setWebhook(`${PUBLIC_URL.replace(/\/+$/, "")}/telegram`)
       .then(() => console.log("✅ Telegram webhook set"))
-      .catch((e) => console.error("Failed to set webhook:", e.message));
+      .catch((e) => console.error("Webhook set failed:", e.message));
   } else {
-    console.warn(
-      "⚠️ PUBLIC URL not detected (RENDER_EXTERNAL_URL or PUBLIC_URL). Webhook not set."
-    );
+    // Default: polling (matches earlier behavior)
+    bot.launch()
+      .then(() => console.log("✅ Telegram polling started"))
+      .catch((e) => console.error("Polling failed:", e.message));
+
+    // Graceful stop on server signals (for local/dev)
+    process.once("SIGINT", () => bot.stop("SIGINT"));
+    process.once("SIGTERM", () => bot.stop("SIGTERM"));
   }
 } else {
   console.warn("⚠️ TELEGRAM_TOKEN not set. Telegram disabled.");
 }
 
-/* -------------------- START -------------------- */
+// ---- Start
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running on ${PORT}`));
