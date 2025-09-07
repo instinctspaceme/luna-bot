@@ -1,10 +1,5 @@
 {
-  "globalAvatar": "luna1.png",
-  "background": "default.jpg",
+  "personality": "friendly and helpful",
   "voice": "alloy",
-  "expressions": {
-    "happy": "luna_happy.png",
-    "sad": "luna_sad.png",
-    "neutral": "luna1.png"
-  }
+  "avatar": "neutral.png"
 }
