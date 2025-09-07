@@ -1,40 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Luna Admin Panel</title>
+  <meta charset="UTF-8" />
+  <title>Admin Panel</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #121212; color: white; text-align: center; }
-    input, select { margin: 10px; padding: 5px; }
+    body {
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    img {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      margin-bottom: 20px;
+      object-fit: cover;
+      background: #222;
+    }
   </style>
 </head>
 <body>
   <h1>Admin Panel</h1>
-  <label>Personality:</label>
-  <input type="text" id="personality"><br>
-  <label>Voice:</label>
-  <input type="text" id="voice"><br>
-  <label>Avatar (path inside /public/avatars):</label>
-  <input type="text" id="avatar"><br>
-  <button onclick="saveConfig()">Save</button>
-<script>
-async function loadConfig() {
-  const res = await fetch("/config");
-  const cfg = await res.json();
-  document.getElementById("personality").value = cfg.personality;
-  document.getElementById("voice").value = cfg.voice;
-  document.getElementById("avatar").value = cfg.avatar;
-}
-async function saveConfig() {
-  const body = {
-    personality: document.getElementById("personality").value,
-    voice: document.getElementById("voice").value,
-    avatar: document.getElementById("avatar").value
-  };
-  await fetch("/config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
-  alert("Saved!");
-}
-loadConfig();
-</script>
+  <img src="avatars/luna.png" onerror="this.src='avatars/fallback.png'" />
+  <p>Manage your bot settings here.</p>
 </body>
 </html>
