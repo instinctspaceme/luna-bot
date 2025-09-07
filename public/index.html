@@ -1,66 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Luna AI</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #000;
-      color: #fff;
-      text-align: center;
-      margin: 0;
-      padding: 0;
-    }
-    #avatar {
-      margin-top: 20px;
-      width: 300px;
-      height: 300px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 5px solid #fff;
-    }
-    #chat-container {
-      margin-top: 20px;
-    }
-    #messages {
-      height: 200px;
-      overflow-y: auto;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-    }
-    input {
-      padding: 10px;
-      width: 70%;
-      border: none;
-      border-radius: 5px;
-    }
-    button {
-      padding: 10px 15px;
-      border: none;
-      background: #4CAF50;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #45a049;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>🌙 Luna AI</h1>
+  <div id="avatar-container">
+    <img id="avatar" src="luna.png" alt="Luna"
+         onerror="this.onerror=null; this.src='fallback.png';" />
+  </div>
 
-  <!-- Avatar always loads via /avatar -->
-  <img id="avatar" src="/avatar" alt="Luna Avatar" 
-       onerror="this.src='/fallback.png'">
-
-  <div id="chat-container">
-    <div id="messages"></div>
-    <input type="text" id="userInput" placeholder="Type a message..." />
+  <div id="chatbox">
+    <input id="userInput" type="text" placeholder="Type a message..." />
     <button onclick="sendMessage()">Send</button>
   </div>
 
@@ -69,24 +22,10 @@
       const input = document.getElementById("userInput");
       const msg = input.value.trim();
       if (!msg) return;
-
-      const messagesDiv = document.getElementById("messages");
-      messagesDiv.innerHTML += `<div><b>You:</b> ${msg}</div>`;
-
       input.value = "";
 
-      try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg })
-        });
-        const data = await res.json();
-        messagesDiv.innerHTML += `<div><b>Luna:</b> ${data.reply}</div>`;
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      } catch (err) {
-        messagesDiv.innerHTML += `<div style="color:red;">Error: ${err.message}</div>`;
-      }
+      // Placeholder – here we’ll later connect to backend/voice
+      alert("You said: " + msg);
     }
   </script>
 </body>
