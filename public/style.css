@@ -1,34 +1,70 @@
-* { box-sizing: border-box }
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background: #0f0f12;
-  color: #e9e9ee;
+const messagesEl = document.getElementById("messages");
+const userInput = document.getElementById("userInput");
+const sendBtn   = document.getElementById("sendBtn");
+const ttsAudio  = document.getElementById("ttsAudio");
+const avatarImg = document.getElementById("avatarImg");
+const avatarSelect = document.getElementById("avatarSelect");
+const refreshAvatarsBtn = document.getElementById("refreshAvatars");
+
+const voiceSelect = document.getElementById("voiceSelect");
+const savePrefsBtn = document.getElementById("savePrefs");
+
+let history = [];
+let configCache = null;
+
+function addMsg(who, text) {
+  const d = document.createElement("div");
+  d.className = `msg ${who}`;
+  d.textContent = text;
+  messagesEl.appendChild(d);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
-.app { max-width: 1100px; margin: 0 auto; padding: 12px; }
 
-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 0; border-bottom: 1px solid #2a2a33;
+async function loadConfig() {
+  const res = await fetch("/config");
+  const cfg = await res.json();
+  configCache = cfg;
+  if (cfg.voice) voiceSelect.value = cfg.voice;
+  if (cfg.globalAvatar) avatarImg.src = cfg.globalAvatar;
 }
-.brand { font-weight: 700; font-size: 20px; }
-.controls select, .controls button { background: #1b1b22; color: #e9e9ee; border: 1px solid #333; padding: 6px 8px; border-radius: 8px; }
 
-main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding-top: 12px; }
-.chat { background: #15151b; border: 1px solid #2a2a33; border-radius: 12px; display: flex; flex-direction: column; }
-#messages { padding: 12px; height: calc(80vh - 140px); overflow: auto; }
-.msg { margin: 8px 0; padding: 10px 12px; border-radius: 10px; max-width: 85%; white-space: pre-wrap; }
-.msg.you { background: #1f2430; align-self: flex-end; }
-.msg.luna { background: #23232c; align-self: flex-start; }
+async function loadAvatars() {
+  try {
+    const res = await fetch("/avatars");
+    const files = await res.json();
+    avatarSelect.innerHTML = "";
+    if (files.length === 0) {
+      const o = document.createElement("option");
+      o.value = "avatars/avatar.png";
+      o.textContent = "avatar.png (default)";
+      avatarSelect.appendChild(o);
+      return;
+    }
+    for (const f of files) {
+      const o = document.createElement("option");
+      o.value = f;
+      o.textContent = f;
+      avatarSelect.appendChild(o);
+    }
+    if (configCache?.globalAvatar) avatarSelect.value = configCache.globalAvatar;
+  } catch (e) {
+    console.error("avatar list failed:", e);
+  }
+}
 
-.input-row { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #2a2a33; }
-.input-row input { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #2a2a33; background: #0f0f12; color: #e9e9ee; }
-.input-row button { padding: 10px 16px; border-radius: 8px; background: #3d3df2; color: white; border: 0; }
+refreshAvatarsBtn.addEventListener("click", () => loadAvatars());
 
-.side { background: #15151b; border: 1px solid #2a2a33; border-radius: 12px; padding: 12px; }
-.avatarWrap { display: flex; justify-content: center; margin-bottom: 10px; }
-#avatarImg { width: 160px; height: 160px; object-fit: cover; border-radius: 50%; border: 2px solid #2a2a33; }
-
-audio { width: 100%; margin-top: 10px; }
-.prefs { margin-top: 14px; }
-.prefs select, .prefs button { width: 100%; margin-top: 8px; background: #0f0f12; color: #e9e9ee; border: 1px solid #2a2a33; padding: 8px; border-radius: 8px; }
+savePrefsBtn.addEventListener("click", async () => {
+  const body = {
+    voice: voiceSelect.value,
+    globalAvatar: avatarSelect.value
+  };
+  const res = await fetch("/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data?.success) {
+    configCache = data.config;
+    avatarImg.src
