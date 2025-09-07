@@ -1,70 +1,50 @@
-const messagesEl = document.getElementById("messages");
-const userInput = document.getElementById("userInput");
-const sendBtn   = document.getElementById("sendBtn");
-const ttsAudio  = document.getElementById("ttsAudio");
-const avatarImg = document.getElementById("avatarImg");
-const avatarSelect = document.getElementById("avatarSelect");
-const refreshAvatarsBtn = document.getElementById("refreshAvatars");
-
-const voiceSelect = document.getElementById("voiceSelect");
-const savePrefsBtn = document.getElementById("savePrefs");
-
-let history = [];
-let configCache = null;
-
-function addMsg(who, text) {
-  const d = document.createElement("div");
-  d.className = `msg ${who}`;
-  d.textContent = text;
-  messagesEl.appendChild(d);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
 }
 
-async function loadConfig() {
-  const res = await fetch("/config");
-  const cfg = await res.json();
-  configCache = cfg;
-  if (cfg.voice) voiceSelect.value = cfg.voice;
-  if (cfg.globalAvatar) avatarImg.src = cfg.globalAvatar;
+#avatar-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  overflow: hidden;
 }
 
-async function loadAvatars() {
-  try {
-    const res = await fetch("/avatars");
-    const files = await res.json();
-    avatarSelect.innerHTML = "";
-    if (files.length === 0) {
-      const o = document.createElement("option");
-      o.value = "avatars/avatar.png";
-      o.textContent = "avatar.png (default)";
-      avatarSelect.appendChild(o);
-      return;
-    }
-    for (const f of files) {
-      const o = document.createElement("option");
-      o.value = f;
-      o.textContent = f;
-      avatarSelect.appendChild(o);
-    }
-    if (configCache?.globalAvatar) avatarSelect.value = configCache.globalAvatar;
-  } catch (e) {
-    console.error("avatar list failed:", e);
-  }
+#avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* fills screen like a video call */
+  border-radius: 0; /* no circle, full face */
 }
 
-refreshAvatarsBtn.addEventListener("click", () => loadAvatars());
+#chatbox {
+  width: 100%;
+  padding: 10px;
+  background: #111;
+  display: flex;
+  justify-content: center;
+}
 
-savePrefsBtn.addEventListener("click", async () => {
-  const body = {
-    voice: voiceSelect.value,
-    globalAvatar: avatarSelect.value
-  };
-  const res = await fetch("/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  const data = await res.json();
-  if (data?.success) {
-    configCache = data.config;
-    avatarImg.src
+#chatbox input {
+  width: 70%;
+  padding: 10px;
+  border-radius: 5px;
+  border: none;
+}
+
+#chatbox button {
+  padding: 10px;
+  margin-left: 10px;
+  border-radius: 5px;
+  border: none;
+  background: #00aaff;
+  color: #fff;
+}
