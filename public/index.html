@@ -1,26 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Luna Avatar</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Luna AI</title>
   <style>
     body {
-      background: #111;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       margin: 0;
+      padding: 0;
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #avatarContainer {
+      margin-top: 40px;
     }
     #avatarImg {
-      width: 400px;   /* make larger close-up */
+      width: 300px;      /* make the avatar large */
       height: auto;
+      border-radius: 20px;
+      box-shadow: 0 0 20px rgba(255,255,255,0.3);
     }
   </style>
 </head>
 <body>
-  <div id="avatar">
-    <!-- Change the filename here to one that exists in your /public/avatars folder -->
+  <h1>🌙 Luna AI</h1>
+  <div id="avatarContainer">
+    <!-- Avatar image -->
     <img id="avatarImg" src="avatars/neutral.png" alt="Luna Avatar">
   </div>
 </body>
