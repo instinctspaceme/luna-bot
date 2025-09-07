@@ -38,7 +38,7 @@ function quickSentiment(text = "") {
   return score > 0 ? "happy" : score < 0 ? "sad" : "neutral";
 }
 
-// --- CHAT ENDPOINT (Web UI) ---
+// --- CHAT ENDPOINT ---
 app.post("/chat", async (req, res) => {
   try {
     const { message, history = [] } = req.body;
