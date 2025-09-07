@@ -16,7 +16,7 @@ const configPath = path.join(__dirname, "config.json");
 let config = {
   personality: "friendly",
   voice: "alloy",
-  avatar: "neutral.png" // default avatar
+  avatar: "neutral.png" // default
 };
 if (fs.existsSync(configPath)) {
   config = { ...config, ...JSON.parse(fs.readFileSync(configPath, "utf8")) };
@@ -44,7 +44,6 @@ app.get("/avatars", (req, res) => {
         .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
         .map(f => `avatars/${f}`);
     }
-    // fallback: check public root
     const publicFiles = fs.readdirSync(path.join(__dirname, "public"))
       .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
       .map(f => f);
@@ -52,7 +51,7 @@ app.get("/avatars", (req, res) => {
   } catch (err) {
     console.error("Avatar scan failed:", err);
   }
-  if (files.length === 0) files = ["neutral.png"]; // fallback
+  if (files.length === 0) files = ["neutral.png"];
   res.json(files);
 });
 
