@@ -1,24 +1,49 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Luna AI Assistant</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <title>Luna • Web + Voice</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
-    <div class="chat">
-      <div id="messages"></div>
-      <div class="input-box">
-        <input type="text" id="userInput" placeholder="Type a message...">
-        <button id="sendBtn">Send</button>
+    <header>
+      <div class="brand">🌙 Luna</div>
+      <div class="controls">
+        <select id="avatarSelect"></select>
+        <button id="refreshAvatars">↻</button>
       </div>
-    </div>
-    <div class="sidebar">
-      <img id="avatar" src="avatar.png" alt="Luna Avatar">
-      <h2>Luna</h2>
-      <audio id="ttsAudio" controls></audio>
-    </div>
+    </header>
+
+    <main>
+      <section class="chat">
+        <div id="messages"></div>
+        <div class="input-row">
+          <input id="userInput" type="text" placeholder="Type a message…" />
+          <button id="sendBtn">Send</button>
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="avatarWrap">
+          <img id="avatarImg" src="avatars/avatar.png" alt="Luna avatar" />
+        </div>
+        <audio id="ttsAudio" controls></audio>
+
+        <div class="prefs">
+          <h4>Defaults</h4>
+          <label>Voice:
+            <select id="voiceSelect">
+              <option value="alloy">alloy</option>
+              <option value="aria">aria</option>
+              <option value="verse">verse</option>
+            </select>
+          </label>
+          <button id="savePrefs">Save</button>
+        </div>
+      </aside>
+    </main>
   </div>
   <script src="script.js"></script>
 </body>
