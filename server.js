@@ -15,7 +15,8 @@ app.use(bodyParser.json());
 const configPath = path.join(__dirname, "config.json");
 let config = {
   avatar: "avatars/luna.png",
-  background: "default.jpg"
+  background: "black",
+  personality: "friendly and helpful"
 };
 if (fs.existsSync(configPath)) {
   config = JSON.parse(fs.readFileSync(configPath));
@@ -30,9 +31,15 @@ app.get("/config", (req, res) => res.json(config));
 app.post("/config", (req, res) => {
   config = { ...config, ...req.body };
   saveConfig();
-  res.json({ success: true });
+  res.json({ success: true, config });
+});
+
+// Fake chat endpoint (replace later with OpenAI if needed)
+app.post("/chat", (req, res) => {
+  const { message } = req.body;
+  res.json({ reply: `Luna says: "${message}" 😊` });
 });
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
