@@ -12,7 +12,6 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
       height: 100vh;
       overflow: hidden;
     }
@@ -25,6 +24,7 @@
       object-fit: cover;
       margin-top: 20px;
       box-shadow: 0 0 25px rgba(255,255,255,0.3);
+      transition: transform 0.2s ease-in-out;
     }
     #chat {
       position: absolute;
@@ -53,6 +53,10 @@
       margin-top: 10px;
       font-size: 1.2em;
     }
+    .talking {
+      transform: scale(1.02);
+      box-shadow: 0 0 40px rgba(0,255,0,0.5);
+    }
   </style>
 </head>
 <body>
@@ -65,19 +69,55 @@
   </div>
 
   <script>
+    let avatars = { neutral: "neutral.png", happy: null, sad: null };
+
     async function loadAvatar() {
       const res = await fetch("/avatars");
       const files = await res.json();
-      document.getElementById("avatar").src = files[0]; // first available
+      files.forEach(f => {
+        if (f.includes("happy")) avatars.happy = f;
+        else if (f.includes("sad")) avatars.sad = f;
+        else if (f.includes("neutral")) avatars.neutral = f;
+      });
+      document.getElementById("avatar").src = avatars.neutral;
+    }
+
+    function detectSentiment(text) {
+      const happyWords = ["happy","love","great","good","awesome"];
+      const sadWords = ["sad","bad","tired","angry","hate"];
+      let t = text.toLowerCase();
+      if (happyWords.some(w => t.includes(w))) return "happy";
+      if (sadWords.some(w => t.includes(w))) return "sad";
+      return "neutral";
+    }
+
+    function animateTalking(start) {
+      const avatar = document.getElementById("avatar");
+      if (start) {
+        avatar.classList.add("talking");
+      } else {
+        avatar.classList.remove("talking");
+      }
     }
 
     async function sendMessage() {
       const msg = document.getElementById("input").value;
       if (!msg) return;
       document.getElementById("reply").innerText = "⏳ Thinking...";
+      animateTalking(true);
+
       setTimeout(() => {
-        document.getElementById("reply").innerText = "Luna: " + msg;
-      }, 800);
+        // fake Luna reply for now
+        const reply = "Luna: " + msg;
+        const mood = detectSentiment(msg + " " + reply);
+        if (avatars[mood]) {
+          document.getElementById("avatar").src = avatars[mood];
+        } else {
+          document.getElementById("avatar").src = avatars.neutral;
+        }
+        document.getElementById("reply").innerText = reply;
+        animateTalking(false);
+      }, 1500);
     }
 
     loadAvatar();
