@@ -2,8 +2,8 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { Telegraf } from "telegraf";
 import bodyParser from "body-parser";
+import OpenAI from "openai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,17 +12,11 @@ const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 
-// --- CONFIG ---
 const configPath = path.join(__dirname, "config.json");
 let config = {
-  globalAvatar: "luna1.png",
-  background: "default.jpg",
+  personality: "friendly and helpful",
   voice: "alloy",
-  expressions: {
-    happy: "luna_happy.png",
-    sad: "luna_sad.png",
-    neutral: "luna1.png"
-  }
+  avatar: "neutral.png"
 };
 if (fs.existsSync(configPath)) {
   config = JSON.parse(fs.readFileSync(configPath));
@@ -31,50 +25,65 @@ function saveConfig() {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
-// --- ROUTES ---
-app.get("/config", (req, res) => res.json(config));
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// --- Sentiment helper ---
+function quickSentiment(text = "") {
+  const pos = ["great","good","awesome","love","happy","yes","cool","thanks","nice","amazing"];
+  const neg = ["bad","sad","angry","hate","no","terrible","awful","pain","sorry"];
+  let score = 0;
+  const t = text.toLowerCase();
+  pos.forEach(w => t.includes(w) && (score += 1));
+  neg.forEach(w => t.includes(w) && (score -= 1));
+  return score > 0 ? "happy" : score < 0 ? "sad" : "neutral";
+}
+
+// --- CHAT ENDPOINT (Web UI) ---
+app.post("/chat", async (req, res) => {
+  try {
+    const { message, history = [] } = req.body;
+
+    const messages = [
+      { role: "system", content: `You are Luna, a ${config.personality} AI assistant.` },
+      ...history,
+      { role: "user", content: message }
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages
+    });
+
+    const reply = completion.choices[0].message.content || "…";
+    const mood = quickSentiment(`${message} ${reply}`);
+
+    // TTS
+    const tts = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: config.voice,
+      input: reply
+    });
+    const audioBuffer = Buffer.from(await tts.arrayBuffer());
+
+    res.json({
+      reply,
+      audio: audioBuffer.toString("base64"),
+      mood
+    });
+  } catch (err) {
+    console.error("API /chat error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- CONFIG ROUTES ---
+app.get("/config", (req, res) => res.json(config));
 app.post("/config", (req, res) => {
   config = { ...config, ...req.body };
   saveConfig();
   res.json({ success: true, config });
 });
 
-// Avatars list (both /public/avatars and /public root)
-app.get("/avatars", (req, res) => {
-  const avatarsDir = path.join(__dirname, "public/avatars");
-  let files = [];
-  try {
-    if (fs.existsSync(avatarsDir)) {
-      files = fs.readdirSync(avatarsDir)
-        .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
-        .map(f => `avatars/${f}`);
-    }
-    const publicFiles = fs.readdirSync(path.join(__dirname, "public"))
-      .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
-      .map(f => f);
-    files = [...files, ...publicFiles];
-  } catch (err) {
-    console.error("Avatar scan failed:", err);
-  }
-  res.json(files);
-});
-
-// --- TELEGRAM BOT ---
-if (process.env.TELEGRAM_TOKEN && process.env.RENDER_EXTERNAL_URL) {
-  const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
-  bot.start(ctx => ctx.reply("Hi! I’m Luna 🌙"));
-  bot.on("text", async ctx => {
-    const msg = ctx.message.text.toLowerCase();
-    let expression = config.expressions.neutral;
-    if (msg.includes("happy")) expression = config.expressions.happy;
-    if (msg.includes("sad")) expression = config.expressions.sad;
-    await ctx.reply(`Luna (${expression.replace(".png","")}): ${ctx.message.text}`);
-  });
-  app.use(bot.webhookCallback("/telegram"));
-  bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/telegram`);
-}
-
-// --- START SERVER ---
+// --- START ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on ${PORT}`));
