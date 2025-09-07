@@ -1,127 +1,96 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>Luna AI</title>
+  <title>Luna</title>
   <style>
     body {
-      font-family: sans-serif;
-      margin: 0;
       background: #111;
-      color: #fff;
+      color: white;
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: flex-start;
+      font-family: sans-serif;
+      margin: 0;
       height: 100vh;
-      overflow: hidden;
+    }
+    h2 {
+      margin: 15px;
+      font-size: 1.8em;
     }
     #avatar {
-      width: 90vw;
+      width: 100vw;
       max-width: 500px;
-      height: 90vw;
+      height: 100vw;
       max-height: 500px;
-      border-radius: 50%;
+      border-radius: 20px;
       object-fit: cover;
-      margin-top: 20px;
-      box-shadow: 0 0 25px rgba(255,255,255,0.3);
-      transition: transform 0.2s ease-in-out;
+      margin: 10px;
+      box-shadow: 0 0 40px rgba(255,255,255,0.3);
     }
     #chat {
-      position: absolute;
-      bottom: 20px;
       width: 100%;
       text-align: center;
+      position: absolute;
+      bottom: 20px;
     }
     textarea {
       width: 70%;
-      height: 60px;
-      border-radius: 10px;
-      border: none;
-      padding: 10px;
+      height: 70px;
+      border-radius: 12px;
+      padding: 12px;
       font-size: 1em;
+      resize: none;
     }
     button {
-      padding: 10px 20px;
-      margin: 10px;
+      padding: 12px 24px;
       font-size: 1em;
-      border: none;
-      border-radius: 10px;
-      background: #4CAF50;
-      color: white;
-    }
-    #reply {
       margin-top: 10px;
-      font-size: 1.2em;
+      border-radius: 10px;
+      background: #4cafef;
+      color: white;
+      border: none;
+      cursor: pointer;
     }
-    .talking {
-      transform: scale(1.02);
-      box-shadow: 0 0 40px rgba(0,255,0,0.5);
+    button:hover {
+      background: #2196f3;
+    }
+    #reply { 
+      margin-top: 12px; 
+      font-size: 1.1em; 
     }
   </style>
 </head>
 <body>
   <h2>🌙 Luna</h2>
-  <!-- Point directly to avatars folder -->
-  <img id="avatar" src="avatars/neutral.png" alt="Luna avatar">
+  <!-- ✅ Make sure this file exists at: public/avatars/neutral.png -->
+  <img id="avatar" src="avatars/neutral.png" alt="Luna Avatar">
+  
   <div id="chat">
-    <textarea id="input" placeholder="Say something..."></textarea><br>
+    <textarea id="input" placeholder="Type a message..."></textarea><br>
     <button onclick="sendMessage()">Send</button>
     <div id="reply"></div>
   </div>
 
   <script>
-    let avatars = { neutral: "avatars/neutral.png", happy: null, sad: null };
-
-    async function loadAvatar() {
-      const res = await fetch("/avatars");
-      const files = await res.json();
-      files.forEach(f => {
-        if (f.includes("happy")) avatars.happy = f;
-        else if (f.includes("sad")) avatars.sad = f;
-        else if (f.includes("neutral")) avatars.neutral = f;
-      });
-      document.getElementById("avatar").src = avatars.neutral;
-    }
-
-    function detectSentiment(text) {
-      const happyWords = ["happy","love","great","good","awesome"];
-      const sadWords = ["sad","bad","tired","angry","hate"];
-      let t = text.toLowerCase();
-      if (happyWords.some(w => t.includes(w))) return "happy";
-      if (sadWords.some(w => t.includes(w))) return "sad";
-      return "neutral";
-    }
-
-    function animateTalking(start) {
-      const avatar = document.getElementById("avatar");
-      if (start) {
-        avatar.classList.add("talking");
-      } else {
-        avatar.classList.remove("talking");
-      }
-    }
-
     async function sendMessage() {
       const msg = document.getElementById("input").value;
       if (!msg) return;
       document.getElementById("reply").innerText = "⏳ Thinking...";
-      animateTalking(true);
 
-      setTimeout(() => {
-        // fake Luna reply for now
-        const reply = "Luna: " + msg;
-        const mood = detectSentiment(msg + " " + reply);
-        if (avatars[mood]) {
-          document.getElementById("avatar").src = avatars[mood];
-        } else {
-          document.getElementById("avatar").src = avatars.neutral;
-        }
-        document.getElementById("reply").innerText = reply;
-        animateTalking(false);
-      }, 1500);
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        document.getElementById("reply").innerText = data.reply;
+      } catch (err) {
+        document.getElementById("reply").innerText = "⚠️ Error: " + err.message;
+      }
     }
-
-    loadAvatar();
   </script>
 </body>
 </html>
