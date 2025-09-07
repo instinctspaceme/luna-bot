@@ -61,7 +61,8 @@
 </head>
 <body>
   <h2>🌙 Luna</h2>
-  <img id="avatar" src="neutral.png" alt="Luna avatar">
+  <!-- Point directly to avatars folder -->
+  <img id="avatar" src="avatars/neutral.png" alt="Luna avatar">
   <div id="chat">
     <textarea id="input" placeholder="Say something..."></textarea><br>
     <button onclick="sendMessage()">Send</button>
@@ -69,7 +70,7 @@
   </div>
 
   <script>
-    let avatars = { neutral: "neutral.png", happy: null, sad: null };
+    let avatars = { neutral: "avatars/neutral.png", happy: null, sad: null };
 
     async function loadAvatar() {
       const res = await fetch("/avatars");
