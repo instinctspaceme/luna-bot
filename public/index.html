@@ -4,35 +4,77 @@
   <meta charset="UTF-8">
   <title>Luna AI</title>
   <style>
-    body { font-family: sans-serif; background: #f5f5f5; text-align: center; }
-    #avatar { width: 280px; height: 280px; border-radius: 50%; object-fit: cover; margin: 20px auto; display: block; }
-    #chat { margin-top: 20px; }
-    textarea { width: 80%; height: 60px; }
-    button { padding: 10px 20px; margin: 10px; }
-    #reply { margin-top: 15px; font-size: 1.2em; }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #avatar {
+      width: 90vw;
+      max-width: 500px;
+      height: 90vw;
+      max-height: 500px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-top: 20px;
+      box-shadow: 0 0 25px rgba(255,255,255,0.3);
+    }
+    #chat {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      text-align: center;
+    }
+    textarea {
+      width: 70%;
+      height: 60px;
+      border-radius: 10px;
+      border: none;
+      padding: 10px;
+      font-size: 1em;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 1em;
+      border: none;
+      border-radius: 10px;
+      background: #4CAF50;
+      color: white;
+    }
+    #reply {
+      margin-top: 10px;
+      font-size: 1.2em;
+    }
   </style>
 </head>
 <body>
-  <h1>🌙 Luna</h1>
+  <h2>🌙 Luna</h2>
   <img id="avatar" src="neutral.png" alt="Luna avatar">
   <div id="chat">
     <textarea id="input" placeholder="Say something..."></textarea><br>
     <button onclick="sendMessage()">Send</button>
+    <div id="reply"></div>
   </div>
-  <div id="reply"></div>
 
   <script>
     async function loadAvatar() {
       const res = await fetch("/avatars");
       const files = await res.json();
-      document.getElementById("avatar").src = files[0]; // load first available avatar
+      document.getElementById("avatar").src = files[0]; // first available
     }
 
     async function sendMessage() {
       const msg = document.getElementById("input").value;
       if (!msg) return;
       document.getElementById("reply").innerText = "⏳ Thinking...";
-      // Fake AI reply for now
       setTimeout(() => {
         document.getElementById("reply").innerText = "Luna: " + msg;
       }, 800);
