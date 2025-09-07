@@ -1,6 +1,11 @@
 {
-  "personality": "friendly and helpful",
-  "voice": "alloy",
+  "globalAvatar": "avatars/avatar.png",
   "background": "default.jpg",
-  "avatar": "avatar.png"
+  "voice": "alloy",
+  "expressions": {
+    "happy": "avatars/luna_happy.png",
+    "sad": "avatars/luna_sad.png",
+    "neutral": "avatars/avatar.png"
+  },
+  "personality": "friendly and helpful"
 }
