@@ -1,22 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Luna AI</title>
+  <title>Luna</title>
   <style>
-    body { margin:0; font-family: sans-serif; background:#111; color:white; text-align:center; }
-    #avatar { max-width:200px; border-radius:50%; margin:20px auto; display:block; }
-    #prefs { margin-top:20px; }
+    body { text-align:center; font-family:sans-serif; background:#111; color:#eee; }
+    #avatar { width: 320px; height: 320px; margin:20px auto; }
+    #avatar img { width:100%; height:100%; object-fit:contain; }
   </style>
 </head>
 <body>
   <h1>🌙 Luna</h1>
-  <img id="avatar" src="luna1.png" alt="Luna Avatar" />
-  <div id="prefs">
-    <h3>Preferences</h3>
-    <select id="avatarSelect"></select>
-    <button onclick="savePrefs()">Save</button>
-  </div>
-  <script src="script.js"></script>
+  <div id="avatar"><img id="avatarImg" src="avatars/neutral.png"></div>
+  <input id="msg" placeholder="Say something..." size="40"/>
+  <button onclick="sendMsg()">Send</button>
+  <p id="reply"></p>
+  <audio id="voice" controls hidden></audio>
+
+  <script>
+    async function sendMsg() {
+      const message = document.getElementById("msg").value;
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      });
+      const data = await res.json();
+      document.getElementById("reply").innerText = data.reply;
+
+      // Avatar mood
+      const avatarImg = document.getElementById("avatarImg");
+      avatarImg.src = `avatars/${data.mood}.png`;
+
+      // Voice playback
+      const audio = document.getElementById("voice");
+      audio.src = "data:audio/mp3;base64," + data.audio;
+      audio.hidden = false;
+      audio.play();
+
+      // Lip sync: toggle open/closed during playback
+      const interval = setInterval(() => {
+        avatarImg.src = avatarImg.src.includes("open") ?
+          `avatars/${data.mood}.png` : `avatars/mouth_open.png`;
+      }, 200);
+
+      audio.onended = () => {
+        clearInterval(interval);
+        avatarImg.src = `avatars/${data.mood}.png`;
+      };
+    }
+  </script>
 </body>
 </html>
