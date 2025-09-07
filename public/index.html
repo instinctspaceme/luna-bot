@@ -3,16 +3,65 @@
 <head>
   <title>Luna</title>
   <style>
-    body { text-align:center; font-family:sans-serif; background:#111; color:#eee; }
-    #avatar { width: 320px; height: 320px; margin:20px auto; }
-    #avatar img { width:100%; height:100%; object-fit:contain; }
+    body { 
+      text-align:center; 
+      font-family:sans-serif; 
+      background:#111; 
+      color:#eee; 
+      margin:0;
+      padding:0;
+      height:100vh;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+    }
+    #avatar {
+      width: 500px; 
+      height: 500px; 
+      margin:20px auto;
+      border-radius: 50%;
+      overflow:hidden;
+      border: 4px solid #444;
+      box-shadow: 0 0 25px rgba(255,255,255,0.2);
+    }
+    #avatar img {
+      width:100%; 
+      height:100%; 
+      object-fit:cover;
+    }
+    input {
+      padding:10px;
+      width:300px;
+      border-radius:10px;
+      border:none;
+      margin-top:10px;
+      font-size:16px;
+    }
+    button {
+      padding:10px 20px;
+      border-radius:10px;
+      border:none;
+      margin-left:10px;
+      background:#6c5ce7;
+      color:white;
+      font-size:16px;
+      cursor:pointer;
+    }
+    #reply {
+      margin-top:20px;
+      font-size:18px;
+      color:#eee;
+    }
   </style>
 </head>
 <body>
   <h1>🌙 Luna</h1>
   <div id="avatar"><img id="avatarImg" src="avatars/neutral.png"></div>
-  <input id="msg" placeholder="Say something..." size="40"/>
-  <button onclick="sendMsg()">Send</button>
+  <div>
+    <input id="msg" placeholder="Say something..."/>
+    <button onclick="sendMsg()">Send</button>
+  </div>
   <p id="reply"></p>
   <audio id="voice" controls hidden></audio>
 
@@ -37,7 +86,7 @@
       audio.hidden = false;
       audio.play();
 
-      // Lip sync: toggle open/closed during playback
+      // Lip sync effect
       const interval = setInterval(() => {
         avatarImg.src = avatarImg.src.includes("open") ?
           `avatars/${data.mood}.png` : `avatars/mouth_open.png`;
