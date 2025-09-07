@@ -16,7 +16,7 @@ const configPath = path.join(__dirname, "config.json");
 let config = {
   personality: "friendly",
   voice: "alloy",
-  avatar: "neutral.png" // default
+  avatar: "neutral.png"
 };
 if (fs.existsSync(configPath)) {
   config = { ...config, ...JSON.parse(fs.readFileSync(configPath, "utf8")) };
