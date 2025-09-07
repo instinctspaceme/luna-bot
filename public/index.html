@@ -2,85 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Luna AI</title>
+  <title>Luna Chat</title>
   <style>
     body {
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       background: #111;
       color: #fff;
-      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
     }
     #avatar {
-      width: 80vw;
-      height: auto;
-      max-width: 500px;
+      width: 350px;
+      height: 350px;
       border-radius: 50%;
       object-fit: cover;
-      margin-bottom: 20px;
+      margin: 20px;
       background: #222;
     }
-    #chatbox {
+    #chat-box {
+      flex: 1;
       width: 90%;
       max-width: 600px;
-      display: flex;
+      overflow-y: auto;
+      border: 1px solid #444;
+      padding: 10px;
+      margin-bottom: 10px;
     }
-    #input {
+    #input-box {
+      display: flex;
+      width: 90%;
+      max-width: 600px;
+    }
+    #input-box input {
       flex: 1;
       padding: 10px;
-      border-radius: 8px;
       border: none;
-      outline: none;
     }
-    #send {
-      padding: 10px 15px;
-      margin-left: 10px;
+    #input-box button {
+      padding: 10px;
       border: none;
-      border-radius: 8px;
-      background: #4cafef;
+      background: #444;
       color: #fff;
-      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <img id="avatar" src="avatars/luna.png" onerror="this.src='avatars/fallback.png'"/>
-  
-  <div id="chatbox">
-    <input id="input" type="text" placeholder="Say something..." />
-    <button id="send">Send</button>
+  <h1>🌙 Luna</h1>
+  <img id="avatar" src="avatars/luna.png" onerror="this.src='avatars/fallback.png'" />
+  <div id="chat-box"></div>
+  <div id="input-box">
+    <input id="message" placeholder="Type a message..." />
+    <button onclick="sendMessage()">Send</button>
   </div>
-  
-  <div id="response"></div>
 
   <script>
-    const sendBtn = document.getElementById("send");
-    const input = document.getElementById("input");
-    const responseDiv = document.getElementById("response");
+    const chatBox = document.getElementById("chat-box");
 
-    sendBtn.addEventListener("click", async () => {
+    function appendMessage(sender, text) {
+      const div = document.createElement("div");
+      div.textContent = `${sender}: ${text}`;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("message");
       const text = input.value.trim();
       if (!text) return;
-      responseDiv.textContent = "⏳ Thinking...";
+      appendMessage("You", text);
+      input.value = "";
 
-      try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text })
-        });
-        const data = await res.json();
-        responseDiv.textContent = data.reply || "No reply.";
-      } catch (err) {
-        responseDiv.textContent = "⚠️ Error: " + err.message;
-      }
-    });
+      // Simulate bot (since OpenAI integration is not in this build)
+      setTimeout(() => {
+        appendMessage("Luna", "I heard: " + text);
+      }, 600);
+    }
   </script>
 </body>
 </html>
