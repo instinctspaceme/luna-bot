@@ -2,60 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Luna Web Chat</title>
-  <style>
-    body { background: #1e1e1e; color: white; font-family: Arial, sans-serif; text-align: center; }
-    #avatar { width: 200px; height: 200px; border-radius: 50%; margin: 20px auto; border: 4px solid #444; }
-    #chat { width: 90%; max-width: 600px; margin: auto; text-align: left; background: #2a2a2a; padding: 20px; border-radius: 10px; }
-    #messages { max-height: 300px; overflow-y: auto; margin-bottom: 10px; }
-    .msg { margin: 5px 0; }
-    .user { color: #00bfff; }
-    .bot { color: #90ee90; }
-  </style>
+  <title>Luna AI Assistant</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Luna Web Chat</h1>
-  <img id="avatar" src="/avatars/luna.png" alt="Avatar">
-  <div id="chat">
-    <div id="messages"></div>
-    <input type="text" id="input" placeholder="Type your message..." style="width:80%;">
-    <button onclick="sendMessage()">Send</button>
+  <div class="app">
+    <div class="chat">
+      <div id="messages"></div>
+      <div class="input-box">
+        <input type="text" id="userInput" placeholder="Type a message...">
+        <button id="sendBtn">Send</button>
+      </div>
+    </div>
+    <div class="sidebar">
+      <img id="avatar" src="avatar.png" alt="Luna Avatar">
+      <h2>Luna</h2>
+      <audio id="ttsAudio" controls></audio>
+    </div>
   </div>
-  <audio id="audio" controls hidden></audio>
-<script>
-async function loadConfig() {
-  const res = await fetch("/config");
-  const cfg = await res.json();
-  document.getElementById("avatar").src = cfg.avatar;
-}
-loadConfig();
-
-async function sendMessage() {
-  const input = document.getElementById("input");
-  const msg = input.value.trim();
-  if (!msg) return;
-  appendMessage("You: " + msg, "user");
-  input.value = "";
-  const res = await fetch("/chat", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ message: msg })
-  });
-  const data = await res.json();
-  appendMessage("Luna: " + data.reply, "bot");
-  if (data.audio) {
-    const audio = document.getElementById("audio");
-    audio.src = "data:audio/mp3;base64," + data.audio;
-    audio.hidden = false;
-    audio.play();
-  }
-}
-function appendMessage(text, cls) {
-  const div = document.createElement("div");
-  div.className = "msg " + cls;
-  div.textContent = text;
-  document.getElementById("messages").appendChild(div);
-}
-</script>
+  <script src="script.js"></script>
 </body>
 </html>
