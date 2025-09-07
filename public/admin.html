@@ -1,29 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Admin Panel</title>
   <style>
     body {
       background: #111;
       color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: sans-serif;
       padding: 20px;
     }
-    img {
-      width: 200px;
-      height: 200px;
-      border-radius: 50%;
-      object-fit: cover;
-      background: #222;
+    select, button {
+      padding: 8px;
+      margin: 10px 0;
     }
   </style>
 </head>
 <body>
-  <h1>Admin Panel</h1>
-  <img src="avatars/luna.png" onerror="this.src='avatars/fallback.png'" />
-  <p>Avatar is set to <b>luna.png</b></p>
+  <h1>⚙️ Admin Panel</h1>
+
+  <label>Avatar: </label>
+  <select id="avatarSelect">
+    <option value="avatars/luna.png">Luna</option>
+    <option value="avatars/fallback.png">Fallback</option>
+  </select>
+  <br>
+  <label>Background Color: </label>
+  <input type="text" id="bgInput" placeholder="black or #hex">
+  <br>
+  <button onclick="saveConfig()">Save</button>
+
+  <script>
+    async function saveConfig() {
+      const avatar = document.getElementById("avatarSelect").value;
+      const background = document.getElementById("bgInput").value;
+      await fetch("/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar, background })
+      });
+      alert("✅ Config saved!");
+    }
+  </script>
 </body>
 </html>
