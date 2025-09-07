@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luna AI</title>
   <style>
     body {
@@ -14,21 +14,104 @@
       text-align: center;
     }
     #avatarContainer {
-      margin-top: 40px;
+      margin-top: 20px;
     }
     #avatarImg {
-      width: 300px;      /* make the avatar large */
+      width: 300px;
       height: auto;
       border-radius: 20px;
       box-shadow: 0 0 20px rgba(255,255,255,0.3);
+    }
+    #chatBox {
+      margin-top: 30px;
+    }
+    #messages {
+      width: 80%;
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: left;
+      background: #222;
+      padding: 15px;
+      border-radius: 10px;
+      min-height: 200px;
+      overflow-y: auto;
+    }
+    #userInput {
+      margin-top: 10px;
+      width: 70%;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+    }
+    #sendBtn {
+      padding: 10px 15px;
+      margin-left: 5px;
+      border: none;
+      border-radius: 5px;
+      background: #4cafef;
+      color: #fff;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <h1>🌙 Luna AI</h1>
+
+  <!-- Avatar -->
   <div id="avatarContainer">
-    <!-- Avatar image -->
     <img id="avatarImg" src="avatars/neutral.png" alt="Luna Avatar">
   </div>
+
+  <!-- Chat area -->
+  <div id="chatBox">
+    <div id="messages"></div>
+    <input type="text" id="userInput" placeholder="Type your message..." />
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <script>
+    const sendBtn = document.getElementById("sendBtn");
+    const userInput = document.getElementById("userInput");
+    const messagesDiv = document.getElementById("messages");
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      // show user msg
+      const userMsg = document.createElement("p");
+      userMsg.textContent = "🧑 You: " + text;
+      messagesDiv.appendChild(userMsg);
+
+      // clear input
+      userInput.value = "";
+
+      // send to backend
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+
+        const botMsg = document.createElement("p");
+        botMsg.textContent = "🤖 Luna: " + data.reply;
+        messagesDiv.appendChild(botMsg);
+
+        // scroll down
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } catch (err) {
+        const errorMsg = document.createElement("p");
+        errorMsg.textContent = "⚠️ Error: " + err.message;
+        messagesDiv.appendChild(errorMsg);
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    userInput.addEventListener("keypress", e => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
 </body>
 </html>
