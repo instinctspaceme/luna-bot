@@ -1,60 +1,52 @@
 import express from "express";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import bodyParser from "body-parser";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import OpenAI from "openai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.static(path.join(__dirname, "public")));
+const PORT = process.env.PORT || 3000;
+
 app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-// --- CONFIG ---
-const configPath = path.join(__dirname, "config.json");
-let config = {
-  personality: "friendly",
-  voice: "alloy",
-  avatar: "neutral.png"
-};
-if (fs.existsSync(configPath)) {
-  config = { ...config, ...JSON.parse(fs.readFileSync(configPath, "utf8")) };
-}
-function saveConfig() {
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-}
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// --- ROUTES ---
-app.get("/config", (req, res) => res.json(config));
-
-app.post("/config", (req, res) => {
-  config = { ...config, ...req.body };
-  saveConfig();
-  res.json({ success: true, config });
+// --- Chat endpoint ---
+app.post("/chat", async (req, res) => {
+  try {
+    const { message } = req.body;
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are Luna, a warm and helpful AI." },
+        { role: "user", content: message }
+      ]
+    });
+    const reply = completion.choices[0].message.content;
+    res.json({ reply });
+  } catch (err) {
+    console.error("Chat error:", err);
+    res.status(500).json({ reply: "⚠️ Error: " + err.message });
+  }
 });
 
-// List avatars
+// --- Avatars endpoint ---
 app.get("/avatars", (req, res) => {
+  const avatarsDir = path.join(__dirname, "public/avatars");
   let files = [];
   try {
-    const avatarsDir = path.join(__dirname, "public/avatars");
     if (fs.existsSync(avatarsDir)) {
-      files = fs.readdirSync(avatarsDir)
-        .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
-        .map(f => `avatars/${f}`);
+      files = fs.readdirSync(avatarsDir).filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f));
     }
-    const publicFiles = fs.readdirSync(path.join(__dirname, "public"))
-      .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
-      .map(f => f);
-    files = [...files, ...publicFiles];
-  } catch (err) {
-    console.error("Avatar scan failed:", err);
+  } catch (e) {
+    console.error(e);
   }
-  if (files.length === 0) files = ["neutral.png"];
-  res.json(files);
+  res.json(files.map(f => "avatars/" + f));
 });
 
-// --- START SERVER ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Luna running at http://localhost:${PORT}`));
