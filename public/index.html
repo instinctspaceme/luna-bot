@@ -4,29 +4,83 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Luna AI</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+    #avatar {
+      width: 80vw;
+      height: auto;
+      max-width: 500px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 20px;
+      background: #222;
+    }
+    #chatbox {
+      width: 90%;
+      max-width: 600px;
+      display: flex;
+    }
+    #input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+    }
+    #send {
+      padding: 10px 15px;
+      margin-left: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #4cafef;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-  <div id="avatar-container">
-    <img id="avatar" src="luna.png" alt="Luna"
-         onerror="this.onerror=null; this.src='fallback.png';" />
-  </div>
-
+  <img id="avatar" src="avatars/luna.png" onerror="this.src='avatars/fallback.png'"/>
+  
   <div id="chatbox">
-    <input id="userInput" type="text" placeholder="Type a message..." />
-    <button onclick="sendMessage()">Send</button>
+    <input id="input" type="text" placeholder="Say something..." />
+    <button id="send">Send</button>
   </div>
+  
+  <div id="response"></div>
 
   <script>
-    async function sendMessage() {
-      const input = document.getElementById("userInput");
-      const msg = input.value.trim();
-      if (!msg) return;
-      input.value = "";
+    const sendBtn = document.getElementById("send");
+    const input = document.getElementById("input");
+    const responseDiv = document.getElementById("response");
 
-      // Placeholder – here we’ll later connect to backend/voice
-      alert("You said: " + msg);
-    }
+    sendBtn.addEventListener("click", async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      responseDiv.textContent = "⏳ Thinking...";
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        responseDiv.textContent = data.reply || "No reply.";
+      } catch (err) {
+        responseDiv.textContent = "⚠️ Error: " + err.message;
+      }
+    });
   </script>
 </body>
 </html>
