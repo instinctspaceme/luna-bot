@@ -7,13 +7,19 @@
 </head>
 <body>
   <div id="avatar-container">
-    <img id="avatar" src="avatars/fallback.png" alt="Luna Avatar">
+    <div class="avatar-wrapper">
+      <img id="avatar" src="avatars/fallback.png" alt="Luna Avatar">
+      <div id="eyes"></div>
+      <div id="mouth"></div>
+    </div>
   </div>
 
   <div id="chat-container">
     <div id="messages"></div>
-    <input id="userInput" type="text" placeholder="Type a message...">
-    <button id="sendBtn">Send</button>
+    <div id="input-row">
+      <input id="userInput" type="text" placeholder="Type a message...">
+      <button id="sendBtn">Send</button>
+    </div>
   </div>
 
   <script src="script.js"></script>
