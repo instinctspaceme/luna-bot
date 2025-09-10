@@ -1,5 +1,7 @@
 {
-  "personality": "friendly",
-  "voice": "alloy",
-  "avatar": "avatars/fallback.png"
+  "avatar": "avatars/fallback.png",
+  "voice": "verse",
+  "mood": "neutral",
+  "personality": "friendly and concise",
+  "voiceOptions": ["verse","sage","nova","alloy"]
 }
