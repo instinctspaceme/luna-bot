@@ -1,7 +1,5 @@
 {
-  "avatarNeutral": "avatars/luna_neutral.png",
-  "avatarHappy": "avatars/luna_happy.png",
-  "avatarSad": "avatars/luna_sad.png",
-  "fallback": "avatars/fallback.png",
-  "name": "Luna"
+  "personality": "friendly",
+  "voice": "alloy",
+  "avatar": "avatars/fallback.png"
 }
