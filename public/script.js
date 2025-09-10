@@ -1,8 +1,7 @@
 async function loadConfig() {
   const res = await fetch("/config");
   const config = await res.json();
-  const avatarEl = document.getElementById("avatar");
-  avatarEl.src = config.avatar || "avatars/fallback.png";
+  document.getElementById("avatar").src = config.avatar || "avatars/fallback.png";
 }
 
 function addMessage(sender, text) {
@@ -13,7 +12,12 @@ function addMessage(sender, text) {
   msgBox.scrollTop = msgBox.scrollHeight;
 }
 
-document.getElementById("sendBtn").addEventListener("click", async () => {
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+document.getElementById("userInput").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendMessage();
+});
+
+async function sendMessage() {
   const input = document.getElementById("userInput");
   const text = input.value.trim();
   if (!text) return;
@@ -32,11 +36,20 @@ document.getElementById("sendBtn").addEventListener("click", async () => {
 
     if (data.audio) {
       const audio = new Audio("data:audio/mp3;base64," + data.audio);
+
+      // Animate mouth during speech
+      const mouth = document.getElementById("mouth");
+      mouth.classList.add("talking");
+
+      audio.onended = () => {
+        mouth.classList.remove("talking");
+      };
+
       audio.play();
     }
   } catch (err) {
     addMessage("System", "⚠️ Error: " + err.message);
   }
-});
+}
 
 loadConfig();
