@@ -1,110 +1,28 @@
-body {
-  margin: 0;
-  padding: 0;
-  background: black;
-  color: white;
-  font-family: Arial, sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100vh;
+/* style.css: clean, close-up avatar layout + chat box */
+:root {
+  --bg: #05060a;
+  --panel: #0f1720;
+  --accent: #4cafef;
+  --muted: #94a3b8;
 }
 
-#avatar-container {
-  width: 100%;
-  height: 70vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-}
+* { box-sizing: border-box; }
+html,body { height: 100%; margin:0; font-family: Inter, Arial, sans-serif; background: var(--bg); color: #fff; }
 
-.avatar-wrapper {
-  position: relative;
-  height: 100%;
-}
+#app { display:flex; flex-direction: column; height:100%; align-items:center; gap:12px; padding:12px; }
 
-#avatar {
-  height: 100%;
-  object-fit: cover;
-}
+/* avatar area — large, close-up */
+#avatar-area { width: 100%; max-width: 900px; height: 62vh; display:flex; align-items:center; justify-content:center; background: linear-gradient(180deg,#081018, #051018); border-radius:12px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+#avatar { width: auto; height:100%; object-fit: cover; display:block; }
 
-/* Eyes (blink effect) */
-#eyes {
-  position: absolute;
-  top: 30%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80px;
-  height: 20px;
-  background: black;
-  border-radius: 50%;
-  animation: blink 6s infinite;
-  opacity: 0.7;
-}
+/* chat area */
+#chat-area { width: 100%; max-width: 900px; background: var(--panel); border-radius:10px; padding:10px; box-shadow: 0 6px 20px rgba(0,0,0,0.6); }
+#messages { height: 150px; overflow-y:auto; padding:8px; background: rgba(255,255,255,0.02); border-radius:8px; margin-bottom:8px; }
+.message { margin:6px 0; font-size:14px; }
+.message.you { color: var(--muted); }
+.message.luna { color: #e8f2ff; font-weight:500; }
 
-@keyframes blink {
-  0%, 90%, 100% { height: 20px; }
-  92%, 98% { height: 2px; }
-}
-
-/* Mouth (lip sync effect) */
-#mouth {
-  position: absolute;
-  bottom: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 15px;
-  background: #ff4d6d;
-  border-radius: 50%;
-  transform-origin: top center;
-  animation: idleMouth 2s infinite;
-  opacity: 0.8;
-}
-
-@keyframes idleMouth {
-  0%, 100% { transform: translateX(-50%) scaleY(0.3); }
-  50% { transform: translateX(-50%) scaleY(0.4); }
-}
-
-.talking {
-  animation: talkingMouth 0.2s infinite;
-}
-
-@keyframes talkingMouth {
-  0%, 100% { transform: translateX(-50%) scaleY(0.2); }
-  50% { transform: translateX(-50%) scaleY(1); }
-}
-
-#chat-container {
-  width: 100%;
-  background: #111;
-  padding: 10px;
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-#messages {
-  flex: 1;
-  overflow-y: auto;
-  margin-bottom: 10px;
-}
-
-#input-row {
-  display: flex;
-}
-
-#userInput {
-  flex: 1;
-  padding: 8px;
-}
-
-#sendBtn {
-  padding: 8px 12px;
-  background: purple;
-  border: none;
-  color: white;
-  cursor: pointer;
-}
+#controls { display:flex; gap:8px; }
+#input { flex:1; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); color: #fff; }
+#send { padding:10px 14px; background: var(--accent); border: none; color: #fff; border-radius:8px; cursor:pointer; }
+#send:active { transform: translateY(1px); }
