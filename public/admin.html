@@ -3,31 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <title>Admin Panel</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <h1>Admin Panel</h1>
-  <form id="configForm">
-    <label>Neutral Avatar: <input name="avatarNeutral" value="avatars/luna_neutral.png"></label><br>
-    <label>Happy Avatar: <input name="avatarHappy" value="avatars/luna_happy.png"></label><br>
-    <label>Sad Avatar: <input name="avatarSad" value="avatars/luna_sad.png"></label><br>
-    <label>Fallback: <input name="fallback" value="avatars/fallback.png"></label><br>
-    <label>Name: <input name="name" value="Luna"></label><br>
-    <button type="submit">Save</button>
-  </form>
+
+  <label>Avatar:</label>
+  <select id="avatar-select"></select><br><br>
+
+  <label>Voice:</label>
+  <input id="voice" type="text" placeholder="e.g. alloy"><br><br>
+
+  <label>Personality:</label>
+  <input id="personality" type="text" placeholder="e.g. friendly"><br><br>
+
+  <button id="save-btn">Save</button>
 
   <script>
-    document.getElementById("configForm").addEventListener("submit", async e => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const cfg = {};
-      formData.forEach((v, k) => cfg[k] = v);
+    async function loadAvatars() {
+      const res = await fetch("/avatars");
+      const files = await res.json();
+      const select = document.getElementById("avatar-select");
+      files.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        select.appendChild(opt);
+      });
+    }
+
+    async function saveConfig() {
+      const body = {
+        avatar: document.getElementById("avatar-select").value,
+        voice: document.getElementById("voice").value,
+        personality: document.getElementById("personality").value
+      };
       await fetch("/config", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cfg)
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body)
       });
-      alert("Config saved!");
-    });
+      alert("Saved!");
+    }
+
+    document.getElementById("save-btn").onclick = saveConfig;
+    loadAvatars();
   </script>
 </body>
 </html>
