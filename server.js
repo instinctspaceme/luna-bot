@@ -88,7 +88,6 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// --- START SERVER ---
 app.listen(PORT, () => {
   console.log(`✅ Luna running at http://localhost:${PORT}`);
 });
