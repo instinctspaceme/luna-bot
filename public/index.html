@@ -3,37 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <title>Luna Avatar</title>
-  <style>
-    body {
-      margin: 0;
-      background: black;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    #avatar {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <img id="avatar" src="avatars/fallback.png" alt="Avatar"
-       onerror="this.src='avatars/fallback.png'">
+  <div id="avatar-container">
+    <img id="avatar" src="avatars/fallback.png" alt="Luna Avatar">
+  </div>
 
-  <script>
-    async function loadConfig() {
-      try {
-        const res = await fetch("/config");
-        const cfg = await res.json();
-        document.getElementById("avatar").src = cfg.avatarNeutral || cfg.fallback;
-      } catch (err) {
-        console.error("Config load failed", err);
-      }
-    }
-    loadConfig();
-  </script>
+  <div id="chat-container">
+    <div id="messages"></div>
+    <input id="userInput" type="text" placeholder="Type a message...">
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
