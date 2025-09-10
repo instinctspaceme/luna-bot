@@ -1,26 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Luna — Chat</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <title>Luna Avatar</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="app">
-    <section id="avatar-area">
-      <img id="avatar" src="avatars/fallback.png" alt="Luna avatar" />
-    </section>
-
-    <section id="chat-area">
-      <div id="messages"></div>
-      <div id="controls">
-        <input id="input" placeholder="Type a message..." />
-        <button id="send">Send</button>
-      </div>
-    </section>
-  </main>
-
+  <div id="avatar-container">
+    <img id="avatar" src="avatars/fallback.png" alt="Avatar">
+  </div>
+  <div id="chat-container">
+    <div id="chat-box"></div>
+    <input type="text" id="user-input" placeholder="Type your message...">
+    <button id="send-btn">Send</button>
+  </div>
   <script src="script.js"></script>
 </body>
 </html>
