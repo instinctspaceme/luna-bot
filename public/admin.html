@@ -3,44 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <title>Admin Panel</title>
-  <style>
-    body {
-      background: #111;
-      color: #fff;
-      font-family: sans-serif;
-      padding: 20px;
-    }
-    select, button {
-      padding: 8px;
-      margin: 10px 0;
-    }
-  </style>
 </head>
 <body>
-  <h1>⚙️ Admin Panel</h1>
-
-  <label>Avatar: </label>
-  <select id="avatarSelect">
-    <option value="avatars/luna.png">Luna</option>
-    <option value="avatars/fallback.png">Fallback</option>
-  </select>
-  <br>
-  <label>Background Color: </label>
-  <input type="text" id="bgInput" placeholder="black or #hex">
-  <br>
-  <button onclick="saveConfig()">Save</button>
+  <h1>Admin Panel</h1>
+  <form id="configForm">
+    <label>Neutral Avatar: <input name="avatarNeutral" value="avatars/luna_neutral.png"></label><br>
+    <label>Happy Avatar: <input name="avatarHappy" value="avatars/luna_happy.png"></label><br>
+    <label>Sad Avatar: <input name="avatarSad" value="avatars/luna_sad.png"></label><br>
+    <label>Fallback: <input name="fallback" value="avatars/fallback.png"></label><br>
+    <label>Name: <input name="name" value="Luna"></label><br>
+    <button type="submit">Save</button>
+  </form>
 
   <script>
-    async function saveConfig() {
-      const avatar = document.getElementById("avatarSelect").value;
-      const background = document.getElementById("bgInput").value;
+    document.getElementById("configForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const cfg = {};
+      formData.forEach((v, k) => cfg[k] = v);
       await fetch("/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ avatar, background })
+        body: JSON.stringify(cfg)
       });
-      alert("✅ Config saved!");
-    }
+      alert("Config saved!");
+    });
   </script>
 </body>
 </html>
