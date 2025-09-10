@@ -1,50 +1,51 @@
 body {
   margin: 0;
   padding: 0;
-  background: #000;
+  background: black;
+  color: white;
+  font-family: Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  height: 100vh;
 }
 
 #avatar-container {
-  flex: 1;
+  width: 100%;
+  height: 80vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
   overflow: hidden;
 }
 
 #avatar {
-  width: 100%;
   height: 100%;
-  object-fit: cover; /* fills screen like a video call */
-  border-radius: 0; /* no circle, full face */
+  object-fit: cover;
 }
 
-#chatbox {
+#chat-container {
   width: 100%;
-  padding: 10px;
   background: #111;
+  padding: 10px;
   display: flex;
-  justify-content: center;
 }
 
-#chatbox input {
-  width: 70%;
-  padding: 10px;
-  border-radius: 5px;
-  border: none;
+#messages {
+  flex: 1;
+  max-height: 150px;
+  overflow-y: auto;
+  margin-bottom: 10px;
 }
 
-#chatbox button {
-  padding: 10px;
-  margin-left: 10px;
-  border-radius: 5px;
+#userInput {
+  flex: 1;
+  padding: 8px;
+}
+
+#sendBtn {
+  padding: 8px 12px;
+  background: purple;
   border: none;
-  background: #00aaff;
-  color: #fff;
+  color: white;
+  cursor: pointer;
 }
