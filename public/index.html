@@ -6,187 +6,34 @@
   <style>
     body {
       margin: 0;
-      background: #000;
+      background: black;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      font-family: Arial, sans-serif;
-      color: white;
-    }
-    #avatar-container {
-      position: relative;
-      width: 100vw;
-      height: 70vh;
-      max-width: 600px;
-      overflow: hidden;
-      border-radius: 16px;
-      box-shadow: 0 0 20px rgba(255,255,255,0.3);
-      margin-bottom: 15px;
-      animation: breathe 6s ease-in-out infinite;
     }
     #avatar {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    /* Blink effect */
-    .blink::after {
-      content: "";
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.7);
-      opacity: 0;
-      animation: blink 6s infinite;
-    }
-    @keyframes blink {
-      0%, 97%, 100% { opacity: 0; }
-      98%, 99% { opacity: 1; }
-    }
-    /* Lip sync mouth */
-    #mouth {
-      position: absolute;
-      bottom: 15%;
-      left: 50%;
-      width: 60px;
-      height: 20px;
-      background: red;
-      border-radius: 0 0 30px 30px;
-      transform: translateX(-50%);
-      opacity: 0;
-    }
-    .talking #mouth {
-      animation: talk 0.15s infinite alternate;
-      opacity: 0.8;
-    }
-    @keyframes talk {
-      from { height: 5px; }
-      to { height: 25px; }
-    }
-    /* Breathing idle effect */
-    @keyframes breathe {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.03); }
-    }
-    #chatbox {
-      width: 90%;
-      max-width: 600px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    #messages {
-      height: 200px;
-      overflow-y: auto;
-      background: rgba(255,255,255,0.1);
-      padding: 10px;
-      border-radius: 8px;
-    }
-    #messages p {
-      margin: 4px 0;
-    }
-    #userInput {
-      display: flex;
-      gap: 8px;
-    }
-    input {
-      flex: 1;
-      padding: 8px;
-      border-radius: 6px;
-      border: none;
-    }
-    button {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 6px;
-      background: #4cafef;
-      color: #fff;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #379edc;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
     }
   </style>
 </head>
 <body>
-  <div id="avatar-container" class="blink">
-    <img id="avatar" src="" alt="Avatar">
-    <div id="mouth"></div>
-  </div>
-  
-  <div id="chatbox">
-    <div id="messages"></div>
-    <div id="userInput">
-      <input id="input" type="text" placeholder="Type a message...">
-      <button onclick="sendMessage()">Send</button>
-    </div>
-  </div>
+  <img id="avatar" src="avatars/fallback.png" alt="Avatar"
+       onerror="this.src='avatars/fallback.png'">
 
   <script>
-    let config = {};
-    async function loadAvatar(initial=true) {
+    async function loadConfig() {
       try {
         const res = await fetch("/config");
-        config = await res.json();
-        if (initial) {
-          document.getElementById("avatar").src = config.avatarNeutral;
-        }
-      } catch (e) {
-        console.error("Error loading config:", e);
-        document.getElementById("avatar").src = "avatars/fallback.png";
+        const cfg = await res.json();
+        document.getElementById("avatar").src = cfg.avatarNeutral || cfg.fallback;
+      } catch (err) {
+        console.error("Config load failed", err);
       }
     }
-
-    function setMood(mood) {
-      const img = document.getElementById("avatar");
-      if (mood === "happy") img.src = config.avatarHappy || config.avatarNeutral;
-      else if (mood === "sad") img.src = config.avatarSad || config.avatarNeutral;
-      else img.src = config.avatarNeutral;
-      img.onerror = () => { img.src = config.fallback; };
-    }
-
-    function addMessage(sender, text) {
-      const messages = document.getElementById("messages");
-      const msg = document.createElement("p");
-      msg.textContent = `${sender}: ${text}`;
-      messages.appendChild(msg);
-      messages.scrollTop = messages.scrollHeight;
-    }
-
-    async function sendMessage() {
-      const input = document.getElementById("input");
-      const text = input.value.trim();
-      if (!text) return;
-
-      addMessage("You", text);
-      input.value = "";
-
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
-      });
-      const data = await res.json();
-      addMessage("Luna", data.reply);
-
-      // Change mood expression
-      setMood(data.mood);
-
-      // Speak with lip sync
-      const utter = new SpeechSynthesisUtterance(data.reply);
-      utter.voice = speechSynthesis.getVoices()[0] || null;
-      
-      const container = document.getElementById("avatar-container");
-      utter.onstart = () => container.classList.add("talking");
-      utter.onend = () => container.classList.remove("talking");
-
-      speechSynthesis.speak(utter);
-    }
-
-    loadAvatar();
+    loadConfig();
   </script>
 </body>
 </html>
